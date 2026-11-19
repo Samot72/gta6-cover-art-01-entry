@@ -1,178 +1,177 @@
-// app.js — the editor around the cover engine in cover.js.
+// app.js — the studio floor around the poster engine in cover.js.
 //
-// Holds the studio's state (which picture sits in which panel, how far each
-// is zoomed and dragged, the grade, the lettering), draws the live preview
-// on the stage canvas, and exports the finished cover as a PNG. Everything
-// happens on the reader's own machine: photos are read as local files and
-// never leave the browser.
+// This file owns the state (which picture each panel shows, how each is
+// zoomed and nudged, the grade and the lettering), paints the live preview
+// onto the stage canvas, and exports finished posters as PNG files. Photos
+// are read from the reader's own disk and drawn locally; nothing is sent
+// anywhere.
 
-import { EXPORT_SIZES, layoutPanels, renderCover, paintedPicture, imagePicture, paintScene } from "./cover.js";
+import { POSTER_SIZES, panelRects, renderPoster, scenePicture, photoPicture, paintScene } from "./cover.js";
 
-// ------------------------------------------------------------------ state --
+// ------------------------------------------------------------------- state
 
-const settings = {
+const state = {
   layout: "hero",
   grade: "sunset",
-  gradeAmount: 0.8,
+  gradeMix: 0.8,
   grain: true,
   vignette: true,
   title: "VICE FRAME",
-  tagline: "neon coast stories",
+  script: "neon coast stories",
   caption: "ONE CITY. NO BRAKES.",
-  heat: 5,
+  stars: 5,
   size: "portrait",
-  active: 0,
+  selected: 0,
   panels: [
     { pic: 0, zoom: 1.0, ox: 0, oy: 0 },
-    { pic: 1, zoom: 1.25, ox: 0.02, oy: -0.02 },
-    { pic: 2, zoom: 1.4, ox: -0.04, oy: 0.03 },
-    { pic: 3, zoom: 1.3, ox: 0.05, oy: 0 },
+    { pic: 1, zoom: 1.22, ox: 0.02, oy: -0.02 },
+    { pic: 2, zoom: 1.38, ox: -0.03, oy: 0.03 },
+    { pic: 3, zoom: 1.28, ox: 0.04, oy: 0 },
   ],
 };
 
-// Pictures in a fixed starting order: the two framed sample scenes the
-// studio ships, then the two scenes it paints live, then whatever photos
-// the reader adds.
-const pictures = [];
-let markReady;
-const ready = new Promise((resolve) => { markReady = resolve; });
+// The picture shelf, in a fixed opening order: the two framed stills the
+// studio ships, then the same two scenes painted live, then any photos the
+// reader adds.
+const shelf = [];
+let settleReady;
+const ready = new Promise((resolve) => { settleReady = resolve; });
 
-function loadSamplePicture(path, paintedKind, label) {
+function loadStill(path, kind, label) {
   return new Promise((resolve) => {
     const img = new Image();
     img.addEventListener("load", () => {
-      const pic = imagePicture(img, label);
+      const pic = photoPicture(img, label);
       pic.img = img;
       resolve(pic);
     });
-    // If the framed sample is missing, fall back to the same scene painted
-    // live so the studio still opens with a full set of pictures.
-    img.addEventListener("error", () => resolve(paintedPicture(paintedKind)));
+    // A missing still must not stall the studio: paint the scene instead.
+    img.addEventListener("error", () => resolve(scenePicture(kind)));
     img.src = path;
   });
 }
 
-async function loadInitialPictures() {
-  const boulevard = await loadSamplePicture("samples/boulevard.jpg", "boulevard", "Sample photo — boulevard");
-  const neon = await loadSamplePicture("samples/neon-street.jpg", "neon", "Sample photo — neon street");
-  pictures.push(boulevard, neon, paintedPicture("boulevard"), paintedPicture("neon"));
-  markReady();
-  refreshPhotoStrip();
-  queueDraw();
+async function openStudio() {
+  const boulevard = await loadStill("samples/boulevard.jpg", "boulevard", "Still — sunset boulevard");
+  const neon = await loadStill("samples/neon-street.jpg", "neon", "Still — neon street");
+  shelf.push(boulevard, neon, scenePicture("boulevard"), scenePicture("neon"));
+  settleReady();
+  refreshShelf();
+  requestDraw();
 }
 
-// --------------------------------------------------------------- preview --
+// ----------------------------------------------------------------- preview
 
 const stage = document.getElementById("stageCanvas");
-const stageCtx = stage.getContext("2d");
-let drawQueued = false;
+const pen = stage.getContext("2d");
+let drawPending = false;
 
-function previewSize() {
-  const { w, h } = EXPORT_SIZES[settings.size];
-  const scale = Math.min(1, 960 / Math.max(w, h));
-  return [Math.round(w * scale), Math.round(h * scale)];
+function previewDims() {
+  const { w, h } = POSTER_SIZES[state.size];
+  const k = Math.min(1, 960 / Math.max(w, h));
+  return [Math.round(w * k), Math.round(h * k)];
 }
 
-function queueDraw() {
-  if (drawQueued) return;
-  drawQueued = true;
+function requestDraw() {
+  if (drawPending) return;
+  drawPending = true;
   requestAnimationFrame(() => {
-    drawQueued = false;
-    const [w, h] = previewSize();
+    drawPending = false;
+    const [w, h] = previewDims();
     if (stage.width !== w || stage.height !== h) {
       stage.width = w;
       stage.height = h;
     }
-    renderCover(stageCtx, w, h, settings, pictures);
+    renderPoster(pen, w, h, { ...state, selected: state.selected }, shelf);
   });
 }
 
-// A full-size render with no selection outline — what Download hands over,
-// and what the screenshot hook below reuses.
-function exportCanvas(sizeName) {
-  const { w, h } = EXPORT_SIZES[sizeName || settings.size];
+// A clean full-size render (no selection outline) — the export, and the
+// surface the screenshot driver at the bottom of this file reuses.
+function renderExport(sizeName) {
+  const { w, h } = POSTER_SIZES[sizeName || state.size];
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  renderCover(c.getContext("2d"), w, h, { ...settings, active: -1 }, pictures);
+  renderPoster(c.getContext("2d"), w, h, { ...state, selected: -1 }, shelf);
   return c;
 }
 
-function downloadCover() {
-  exportCanvas().toBlob((blob) => {
+function downloadPoster() {
+  renderExport().toBlob((blob) => {
     if (!blob) return;
-    const link = document.createElement("a");
-    const { w, h } = EXPORT_SIZES[settings.size];
-    link.href = URL.createObjectURL(blob);
-    link.download = `viceframe-cover-${w}x${h}.png`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    const { w, h } = POSTER_SIZES[state.size];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `viceframe-${w}x${h}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }, "image/png");
 }
 
-// ---------------------------------------------------------------- photos --
+// ------------------------------------------------------------------ photos
 
-const strip = document.getElementById("photoStrip");
-const panelPhoto = document.getElementById("panelPhotoSelect");
+const stripEl = document.getElementById("photoStrip");
+const panelSelect = document.getElementById("panelPhotoSelect");
 const panelNote = document.getElementById("panelLabel");
-const zoomSlider = document.getElementById("zoomRange");
+const zoomEl = document.getElementById("zoomRange");
 
-function refreshPhotoStrip() {
-  strip.replaceChildren();
-  pictures.forEach((pic, i) => {
+function refreshShelf() {
+  stripEl.replaceChildren();
+  shelf.forEach((pic, i) => {
     let thumb;
     if (pic.img) {
       thumb = pic.img.cloneNode();
     } else {
       thumb = document.createElement("div");
-      thumb.textContent = pic.label.replace("Painted scene — ", "Painted: ");
+      thumb.textContent = pic.label.replace("Studio scene — ", "Scene: ");
       thumb.classList.add("scene");
     }
     thumb.classList.add("photo-thumb");
     thumb.title = pic.label;
-    if (settings.panels[settings.active].pic === i) thumb.classList.add("on");
-    thumb.addEventListener("click", () => putInActivePanel(i));
-    strip.append(thumb);
+    if (state.panels[state.selected].pic === i) thumb.classList.add("on");
+    thumb.addEventListener("click", () => assignToSelected(i));
+    stripEl.append(thumb);
   });
-  panelPhoto.replaceChildren();
-  pictures.forEach((pic, i) => {
+  panelSelect.replaceChildren();
+  shelf.forEach((pic, i) => {
     const opt = document.createElement("option");
     opt.value = String(i);
     opt.textContent = `${i + 1}. ${pic.label}`;
-    panelPhoto.append(opt);
+    panelSelect.append(opt);
   });
   syncPanelControls();
 }
 
 function syncPanelControls() {
-  const panel = settings.panels[settings.active];
-  const count = layoutPanels(settings.layout, 1, 1).length;
-  panelNote.textContent = `Panel ${settings.active + 1} of ${count} — click a panel on the cover, then drag to position its photo.`;
-  zoomSlider.value = String(Math.round((panel.zoom || 1) * 100));
-  panelPhoto.value = String(panel.pic);
+  const panel = state.panels[state.selected];
+  const count = panelRects(state.layout, 1, 1).length;
+  panelNote.textContent = `Panel ${state.selected + 1} of ${count} — click a panel on the poster, then drag to position its photo.`;
+  zoomEl.value = String(Math.round((panel.zoom || 1) * 100));
+  panelSelect.value = String(panel.pic);
 }
 
-function putInActivePanel(i) {
-  settings.panels[settings.active].pic = i;
-  refreshPhotoStrip();
-  queueDraw();
+function assignToSelected(i) {
+  state.panels[state.selected].pic = i;
+  refreshShelf();
+  requestDraw();
 }
 
-function addPhoto(file) {
+function addPhotoFile(file) {
   if (!file || !file.type.startsWith("image/")) return;
   const img = new Image();
   img.addEventListener("load", () => {
-    const pic = imagePicture(img, `Your photo — ${file.name}`);
+    const pic = photoPicture(img, `Your photo — ${file.name}`);
     pic.img = img;
-    pictures.push(pic);
-    putInActivePanel(pictures.length - 1);
+    shelf.push(pic);
+    assignToSelected(shelf.length - 1);
   });
   img.src = URL.createObjectURL(file);
 }
 
 const fileInput = document.getElementById("fileInput");
 fileInput.addEventListener("change", () => {
-  for (const file of fileInput.files) addPhoto(file);
+  for (const f of fileInput.files) addPhotoFile(f);
   fileInput.value = "";
 });
 window.addEventListener("dragover", (e) => {
@@ -183,12 +182,12 @@ window.addEventListener("dragleave", () => document.body.classList.remove("dragg
 window.addEventListener("drop", (e) => {
   e.preventDefault();
   document.body.classList.remove("dragging");
-  for (const file of e.dataTransfer.files) addPhoto(file);
+  for (const f of e.dataTransfer.files) addPhotoFile(f);
 });
 
-// ------------------------------------------------- panel drag, zoom, pick --
+// ------------------------------------------- panel picking, drag and zoom
 
-function stagePoint(e) {
+function stageCoords(e) {
   const box = stage.getBoundingClientRect();
   return [
     (e.clientX - box.left) * (stage.width / box.width),
@@ -196,8 +195,8 @@ function stagePoint(e) {
   ];
 }
 
-function panelIndexAt(x, y) {
-  const rects = layoutPanels(settings.layout, stage.width, stage.height);
+function panelAt(x, y) {
+  const rects = panelRects(state.layout, stage.width, stage.height);
   for (let i = rects.length - 1; i >= 0; i--) {
     const r = rects[i];
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return i;
@@ -205,105 +204,107 @@ function panelIndexAt(x, y) {
   return -1;
 }
 
-let dragState = null;
+let drag = null;
 stage.addEventListener("pointerdown", (e) => {
-  const [x, y] = stagePoint(e);
-  const i = panelIndexAt(x, y);
+  const [x, y] = stageCoords(e);
+  const i = panelAt(x, y);
   if (i < 0) return;
-  settings.active = i;
-  dragState = { x, y, ox: settings.panels[i].ox || 0, oy: settings.panels[i].oy || 0 };
+  state.selected = i;
+  drag = { x, y, ox: state.panels[i].ox || 0, oy: state.panels[i].oy || 0 };
   stage.setPointerCapture(e.pointerId);
-  refreshPhotoStrip();
-  queueDraw();
+  refreshShelf();
+  requestDraw();
 });
 stage.addEventListener("pointermove", (e) => {
-  if (!dragState) return;
-  const [x, y] = stagePoint(e);
-  const rect = layoutPanels(settings.layout, stage.width, stage.height)[settings.active];
-  const panel = settings.panels[settings.active];
+  if (!drag) return;
+  const [x, y] = stageCoords(e);
+  const rect = panelRects(state.layout, stage.width, stage.height)[state.selected];
+  const panel = state.panels[state.selected];
   const clamp = (v) => Math.max(-0.6, Math.min(0.6, v));
-  panel.ox = clamp(dragState.ox + (x - dragState.x) / rect.w);
-  panel.oy = clamp(dragState.oy + (y - dragState.y) / rect.h);
-  queueDraw();
+  panel.ox = clamp(drag.ox + (x - drag.x) / rect.w);
+  panel.oy = clamp(drag.oy + (y - drag.y) / rect.h);
+  requestDraw();
 });
-stage.addEventListener("pointerup", () => { dragState = null; });
+stage.addEventListener("pointerup", () => { drag = null; });
 stage.addEventListener("wheel", (e) => {
   e.preventDefault();
-  const [x, y] = stagePoint(e);
-  const i = panelIndexAt(x, y);
+  const [x, y] = stageCoords(e);
+  const i = panelAt(x, y);
   if (i < 0) return;
-  settings.active = i;
-  const panel = settings.panels[i];
+  state.selected = i;
+  const panel = state.panels[i];
   panel.zoom = Math.max(1, Math.min(3, (panel.zoom || 1) * (e.deltaY < 0 ? 1.09 : 0.92)));
-  refreshPhotoStrip();
-  queueDraw();
+  refreshShelf();
+  requestDraw();
 }, { passive: false });
 
-zoomSlider.addEventListener("input", () => {
-  settings.panels[settings.active].zoom = Number(zoomSlider.value) / 100;
-  queueDraw();
+zoomEl.addEventListener("input", () => {
+  state.panels[state.selected].zoom = Number(zoomEl.value) / 100;
+  requestDraw();
 });
-panelPhoto.addEventListener("change", () => putInActivePanel(Number(panelPhoto.value)));
+panelSelect.addEventListener("change", () => assignToSelected(Number(panelSelect.value)));
 document.getElementById("fillAllBtn").addEventListener("click", () => {
-  const pic = settings.panels[settings.active].pic;
-  for (const panel of settings.panels) panel.pic = pic;
-  queueDraw();
+  const pic = state.panels[state.selected].pic;
+  for (const p of state.panels) p.pic = pic;
+  requestDraw();
 });
 document.getElementById("shuffleBtn").addEventListener("click", () => {
-  settings.panels.forEach((panel, i) => {
-    panel.pic = (panel.pic + 1 + (i % 2)) % pictures.length;
-    panel.zoom = 1.1 + ((i * 37) % 40) / 100;
+  state.panels.forEach((p, i) => {
+    p.pic = (p.pic + 1 + (i % 2)) % shelf.length;
+    p.zoom = 1.08 + ((i * 41) % 42) / 100;
   });
-  refreshPhotoStrip();
-  queueDraw();
+  refreshShelf();
+  requestDraw();
 });
 
-// ------------------------------------------------------------- the controls --
+// ------------------------------------------------------------ control cards
 
-function wireSegmented(id, apply) {
+function wireSeg(id, apply) {
   const seg = document.getElementById(id);
   seg.addEventListener("click", (e) => {
     const btn = e.target.closest("button");
     if (!btn) return;
     for (const b of seg.querySelectorAll("button")) b.classList.toggle("on", b === btn);
     apply(btn.dataset);
-    queueDraw();
+    requestDraw();
   });
 }
-wireSegmented("layoutSeg", (d) => {
-  settings.layout = d.layout;
-  const count = layoutPanels(settings.layout, 1, 1).length;
-  if (settings.active >= count) settings.active = 0;
+wireSeg("layoutSeg", (d) => {
+  state.layout = d.layout;
+  const count = panelRects(state.layout, 1, 1).length;
+  if (state.selected >= count) state.selected = 0;
   syncPanelControls();
 });
-wireSegmented("gradeSeg", (d) => { settings.grade = d.grade; });
-wireSegmented("sizeSeg", (d) => { settings.size = d.size; });
+wireSeg("gradeSeg", (d) => { state.grade = d.grade; });
+wireSeg("sizeSeg", (d) => { state.size = d.size; });
 
 document.getElementById("gradeRange").addEventListener("input", (e) => {
-  settings.gradeAmount = Number(e.target.value) / 100;
-  queueDraw();
+  state.gradeMix = Number(e.target.value) / 100;
+  requestDraw();
 });
-document.getElementById("grainCheck").addEventListener("change", (e) => { settings.grain = e.target.checked; queueDraw(); });
-document.getElementById("vignetteCheck").addEventListener("change", (e) => { settings.vignette = e.target.checked; queueDraw(); });
-document.getElementById("starsRange").addEventListener("input", (e) => { settings.heat = Number(e.target.value); queueDraw(); });
-document.getElementById("titleInput").addEventListener("input", (e) => { settings.title = e.target.value; queueDraw(); });
-document.getElementById("subtitleInput").addEventListener("input", (e) => { settings.tagline = e.target.value; queueDraw(); });
-document.getElementById("captionInput").addEventListener("input", (e) => { settings.caption = e.target.value; queueDraw(); });
-document.getElementById("downloadBtn").addEventListener("click", downloadCover);
+document.getElementById("grainCheck").addEventListener("change", (e) => { state.grain = e.target.checked; requestDraw(); });
+document.getElementById("vignetteCheck").addEventListener("change", (e) => { state.vignette = e.target.checked; requestDraw(); });
+document.getElementById("starsRange").addEventListener("input", (e) => { state.stars = Number(e.target.value); requestDraw(); });
+document.getElementById("titleInput").addEventListener("input", (e) => { state.title = e.target.value; requestDraw(); });
+document.getElementById("subtitleInput").addEventListener("input", (e) => { state.script = e.target.value; requestDraw(); });
+document.getElementById("captionInput").addEventListener("input", (e) => { state.caption = e.target.value; requestDraw(); });
+document.getElementById("downloadBtn").addEventListener("click", downloadPoster);
 
-// Screenshot hook: a headless browser drives the real studio through this —
-// it waits for `ready`, changes layout/grade/size exactly as the controls
-// do, and reads exported covers back as data URLs.
-window.viceFrameStudio = {
-  settings,
-  pictures,
+// ------------------------------------------------------- screenshot driver
+// A headless browser steers the real studio through this handle when the
+// entry's screenshots are taken: it waits for `ready`, changes layout,
+// grade and size exactly as the control cards do, paints scenes, and reads
+// exported posters back as data URLs.
+window.ViceFrame = {
+  state,
+  shelf,
   ready,
   paintScene,
-  setLayout(layout) { settings.layout = layout; queueDraw(); },
-  setGrade(grade) { settings.grade = grade; queueDraw(); },
-  setSize(size) { settings.size = size; queueDraw(); },
-  exportDataURL(sizeName) { return exportCanvas(sizeName).toDataURL("image/png"); },
+  setLayout(v) { state.layout = v; requestDraw(); },
+  setGrade(v) { state.grade = v; requestDraw(); },
+  setSize(v) { state.size = v; requestDraw(); },
+  exportDataURL(sizeName) { return renderExport(sizeName).toDataURL("image/png"); },
 };
 
-loadInitialPictures();
-queueDraw();
+openStudio();
+requestDraw();

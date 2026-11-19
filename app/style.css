@@ -1,15 +1,15 @@
-/* ViceFrame Cover Studio — editor chrome: deep violet panels, neon accents.
-   System font stacks only; nothing is fetched. */
+/* ViceFrame Cover Studio — the editor's own chrome.
+   Deep-violet room, neon accents, system font stacks only. */
 
 :root {
-  --room: #130e1f;
-  --card: #1f1932;
-  --card-line: #392c5c;
-  --paper: #f5effd;
-  --paper-dim: #b9aad9;
+  --room: #141021;
+  --card: #201a36;
+  --line: #3a2d60;
+  --ink: #f6f0fe;
+  --ink-dim: #bcabdb;
   --pink: #ff4d8d;
   --amber: #ff9a3d;
-  --mint: #2ee6c8;
+  --mint: #2fe8c6;
   --gold: #ffd76a;
 }
 
@@ -18,14 +18,14 @@ html, body { margin: 0; padding: 0; }
 
 body {
   min-height: 100vh;
-  color: var(--paper);
+  color: var(--ink);
   background:
-    radial-gradient(1100px 640px at 72% -12%, #3b1d60 0%, rgba(59, 29, 96, 0) 58%),
+    radial-gradient(1050px 620px at 74% -10%, #3d1e63 0%, rgba(61, 30, 99, 0) 58%),
     var(--room);
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
-/* ------------------------------------------------------------- masthead */
+/* -------------------------------------------------------------- masthead */
 
 .masthead {
   position: sticky;
@@ -35,66 +35,66 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: rgba(19, 14, 31, 0.88);
-  border-bottom: 1px solid var(--card-line);
+  background: rgba(20, 16, 33, 0.9);
+  border-bottom: 1px solid var(--line);
 }
 
-.wordmark { display: flex; align-items: baseline; gap: 10px; }
-.wordmark-badge {
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand-chip {
   padding: 3px 8px;
   border-radius: 4px;
   background: linear-gradient(180deg, var(--gold), var(--pink));
-  color: #24102f;
+  color: #25102f;
   font-family: "Arial Narrow", Impact, sans-serif;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 1px;
 }
-.wordmark-name {
+.brand-name {
   font-family: "Arial Narrow", Impact, sans-serif;
   font-size: 24px;
   letter-spacing: 3px;
 }
-.wordmark-sub {
+.brand-tag {
   color: var(--mint);
   font-family: "Brush Script MT", "Segoe Script", cursive;
   font-size: 19px;
   font-style: italic;
 }
 
-.masthead-actions { display: flex; gap: 8px; }
+.masthead-buttons { display: flex; gap: 8px; }
 
-.button {
+.btn {
   display: inline-block;
   padding: 8px 14px;
-  border: 1px solid var(--card-line);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #2b2247;
-  color: var(--paper);
+  background: #2c2349;
+  color: var(--ink);
   font-family: inherit;
   font-size: 14px;
   cursor: pointer;
 }
-.button:hover { border-color: var(--pink); }
-.button.go {
+.btn:hover { border-color: var(--pink); }
+.btn.primary {
   border: none;
   background: linear-gradient(180deg, var(--amber), var(--pink));
   color: #fff;
   font-weight: 700;
   letter-spacing: 0.4px;
 }
-.button.block { width: 100%; margin-top: 8px; }
+.btn.wide { width: 100%; margin-top: 8px; }
 
-/* ------------------------------------------------------------ workbench */
+/* ------------------------------------------------------------- workbench */
 
-.workbench {
+.bench {
   display: flex;
   align-items: flex-start;
   gap: 18px;
   padding: 18px 20px;
 }
 
-.panel-rail {
+.rail {
   flex: 0 0 300px;
   width: 300px;
   display: flex;
@@ -105,7 +105,7 @@ body {
 .card {
   padding: 12px 14px;
   background: var(--card);
-  border: 1px solid var(--card-line);
+  border: 1px solid var(--line);
   border-radius: 10px;
 }
 .card h2 {
@@ -118,16 +118,16 @@ body {
   text-transform: uppercase;
 }
 
-.fineprint { margin: 8px 0 0; color: var(--paper-dim); font-size: 12.5px; line-height: 1.45; }
+.note { margin: 8px 0 0; color: var(--ink-dim); font-size: 12.5px; line-height: 1.45; }
 
-.photo-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.strip { display: flex; flex-wrap: wrap; gap: 8px; }
 .photo-thumb {
   width: 58px;
   height: 58px;
   object-fit: cover;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: #0d0a17;
+  background: #0e0a18;
   cursor: pointer;
 }
 .photo-thumb.on { border-color: var(--mint); }
@@ -136,7 +136,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 4px;
-  border: 2px solid #463a70;
+  border: 2px solid #483a72;
   color: var(--gold);
   font-size: 10px;
   text-align: center;
@@ -146,21 +146,21 @@ body {
 .seg button {
   flex: 1 1 45%;
   padding: 7px 6px;
-  border: 1px solid var(--card-line);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #2b2247;
-  color: var(--paper);
+  background: #2c2349;
+  color: var(--ink);
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .seg button.on {
-  background: linear-gradient(180deg, #533181, #35245e);
+  background: linear-gradient(180deg, #553383, #36255f);
   border-color: var(--pink);
   color: #fff;
 }
 
-.slider-row {
+.row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -168,16 +168,16 @@ body {
   margin-top: 10px;
   font-size: 13.5px;
 }
-.slider-row input[type="range"] { flex: 1; accent-color: var(--pink); }
+.row input[type="range"] { flex: 1; accent-color: var(--pink); }
 
-.tick { display: block; margin-top: 8px; font-size: 13.5px; cursor: pointer; }
-.tick input { accent-color: var(--pink); }
+.check { display: block; margin-top: 8px; font-size: 13.5px; cursor: pointer; }
+.check input { accent-color: var(--pink); }
 
 .field { display: block; margin-top: 8px; font-size: 13.5px; }
 .field span {
   display: block;
   margin-bottom: 4px;
-  color: var(--paper-dim);
+  color: var(--ink-dim);
   font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -186,17 +186,17 @@ body {
 .field select {
   width: 100%;
   padding: 8px;
-  border: 1px solid var(--card-line);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #110c1f;
-  color: var(--paper);
+  background: #120d20;
+  color: var(--ink);
   font-family: inherit;
   font-size: 15px;
 }
 .field input[type="text"]:focus,
 .field select:focus { outline: 1px solid var(--pink); }
 
-/* ---------------------------------------------------------------- stage */
+/* ------------------------------------------------------------------ stage */
 
 .stage {
   flex: 1;
@@ -218,11 +218,11 @@ body {
   touch-action: none;
 }
 #stageCanvas:active { cursor: grabbing; }
-.stage-hint { margin: 0; color: var(--paper-dim); font-size: 13px; }
+.hint { margin: 0; color: var(--ink-dim); font-size: 13px; }
 
 body.dragging .stage { outline: 2px dashed var(--mint); outline-offset: 8px; }
 
 @media (max-width: 900px) {
-  .workbench { flex-direction: column; }
-  .panel-rail { flex: none; width: 100%; }
+  .bench { flex-direction: column; }
+  .rail { flex: none; width: 100%; }
 }

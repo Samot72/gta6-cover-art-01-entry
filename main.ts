@@ -1,135 +1,159 @@
-// Entry program for the ViceFrame Cover Studio entry (gta6-cover-art-01).
+// main.ts — the hand-in program for the ViceFrame Cover Studio entry
+// (make.fun bounty gta6-cover-art-01).
 //
-// The actual deliverable is a browser app that lives in app/ as plain static
-// files, plus a small set of screenshots in screenshots/. This program's only
-// job is the hand-in: copy both folders into the output directory and ask the
-// vendored make.fun library to describe them in a dossier.json. The grader
-// sets the output directory itself; when running by hand, point
-// MAKEFUN_OUTPUT_DIR at a scratch folder instead:
+// The entry itself is a static browser app under app/ plus screenshots
+// under screenshots/. This program performs the delivery: it mirrors both
+// folders into the output directory, asks the vendored library in
+// vendor/makefun-app.ts to write the dossier describing them, and then
+// audits what it just wrote against the gate's published caps, so a bad
+// tree fails here with a plain message instead of at grading time.
 //
-//   MAKEFUN_OUTPUT_DIR=/tmp/viceframe-out node main.ts
+// Run it the way the grader does, with the output directory named by the
+// environment (outside the grader, MAKEFUN_OUTPUT_DIR stands in for /output):
 //
-// Node 22 runs this TypeScript file directly, and nothing here needs a
-// package beyond the standard library and vendor/makefun-app.ts.
+//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+//
+// Node 22 runs the TypeScript directly; only the standard library and the
+// vendored file are imported.
 
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildDossier } from "./vendor/makefun-app.ts";
 
-const root = dirname(fileURLToPath(import.meta.url));
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+const here = fileURLToPath(new URL(".", import.meta.url));
+const target = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 
-// Limits from the kit's gate reference. buildDossier already enforces them
-// while it writes, but the hand-in re-checks the cheap ones afterwards so a
-// bad tree fails loudly here rather than silently at grading time.
-const GATE = {
-  dossierTextBytes: 160 * 1024,
-  dossierFileBytes: 1536 * 1024,
-  shotCount: [3, 4] as const,
+// The gate's caps, from the kit's reference file.
+const CAPS = {
+  textBytes: 160 * 1024, // dossier text section
+  dossierBytes: 1536 * 1024, // dossier.json as a whole
+  shotsMax: 4,
+  shotsMin: 3,
   shotBytes: 256 * 1024,
-  shotLongSide: 1280,
-  shotShortSide: 480,
-  appEntries: 993,
+  shotLong: 1280,
+  shotShort: 480,
+  appFiles: 993,
   appBytes: 48 * 1024 * 1024,
   appPathBytes: 1000,
-};
+} as const;
 
-function copyTree(from: string, to: string): number {
+// Copy a folder across and report how many files landed.
+function mirror(from: string, to: string): number {
   cpSync(from, to, { recursive: true });
-  let files = 0;
-  for (const entry of readdirSync(to, { withFileTypes: true })) {
-    if (entry.isDirectory()) files += copyTreeCount(join(to, entry.name));
-    else files += 1;
-  }
-  return files;
+  let n = 0;
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(join(dir, e.name));
+      else n += 1;
+    }
+  };
+  walk(to);
+  return n;
 }
 
-function copyTreeCount(dir: string): number {
-  let files = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    files += entry.isDirectory() ? copyTreeCount(join(dir, entry.name)) : 1;
-  }
-  return files;
-}
-
-// Pixel dimensions of a PNG or JPEG without decoding it: PNG carries them in
-// the IHDR chunk right after the signature; JPEG in a start-of-frame segment
-// found by walking the marker chain. Returns null for anything else.
-function imageSize(path: string): { w: number; h: number } | null {
-  const buf = readFileSync(path);
-  if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47 && buf.toString("ascii", 12, 16) === "IHDR") {
-    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
-  }
-  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+// Read a PNG or JPEG's pixel size from its header bytes alone.
+// PNG: width/height are big-endian uint32s inside IHDR, at offsets 16/20.
+// JPEG: walk the marker segments until a start-of-frame marker turns up;
+// its payload carries height then width.
+function pixelSize(path: string): { w: number; h: number } | null {
+  const b = readFileSync(path);
+  const isPng = b.length > 24 && b.readUInt32BE(0) === 0x89504e47 && b.toString("latin1", 12, 16) === "IHDR";
+  if (isPng) return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
     let at = 2;
-    while (at + 9 < buf.length) {
-      if (buf[at] !== 0xff) return null;
-      const marker = buf[at + 1];
-      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-        return { h: buf.readUInt16BE(at + 5), w: buf.readUInt16BE(at + 7) };
-      }
-      at += 2 + buf.readUInt16BE(at + 2);
+    while (at + 9 < b.length && b[at] === 0xff) {
+      const marker = b[at + 1];
+      const isFrame = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+      if (isFrame) return { w: b.readUInt16BE(at + 7), h: b.readUInt16BE(at + 5) };
+      at += 2 + b.readUInt16BE(at + 2);
     }
   }
   return null;
 }
 
-function checkHandedIn(dossierSize: number): string[] {
-  const notes: string[] = [];
-  const appDir = join(outDir, "app");
-  if (!existsSync(join(appDir, "index.html"))) {
-    throw new Error("hand-in check: app/index.html is missing from the output");
-  }
-  const shots = readdirSync(join(outDir, "screenshots")).filter((n) => !n.startsWith("."));
-  const [minShots, maxShots] = GATE.shotCount;
-  if (shots.length < minShots || shots.length > maxShots) {
-    throw new Error(`hand-in check: need ${minShots}-${maxShots} screenshots, found ${shots.length}`);
-  }
-  for (const name of shots) {
-    const path = join(outDir, "screenshots", name);
-    const { size } = statSync(path);
-    if (size > GATE.shotBytes) {
-      throw new Error(`hand-in check: ${name} weighs ${size} bytes, past the 256 KiB cap`);
+// Walk the delivered app tree once: entries counted (files and folders
+// together, the gate's own count), file bytes summed, and every path's
+// UTF-8 length measured. Returns the tallies for the audit to judge.
+function surveyApp(appDir: string): { entries: number; bytes: number; longestPath: number } {
+  let entries = 0;
+  let bytes = 0;
+  let longestPath = 0;
+  const walk = (dir: string, rel: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      entries += 1;
+      longestPath = Math.max(longestPath, Buffer.byteLength(childRel, "utf8"));
+      if (e.isDirectory()) walk(join(dir, e.name), childRel);
+      else bytes += statSync(join(dir, e.name)).size;
     }
-    const dims = imageSize(path);
-    if (!dims) throw new Error(`hand-in check: ${name} is not a readable PNG or JPEG`);
-    const long = Math.max(dims.w, dims.h);
-    const short = Math.min(dims.w, dims.h);
-    if (long > GATE.shotLongSide || short < GATE.shotShortSide) {
-      throw new Error(
-        `hand-in check: ${name} is ${dims.w}x${dims.h}, outside the ${GATE.shotLongSide}/${GATE.shotShortSide} side limits`,
-      );
-    }
-  }
-  if (dossierSize > GATE.dossierFileBytes) {
-    throw new Error(`hand-in check: dossier.json weighs ${dossierSize} bytes, past the 1.5 MiB cap`);
-  }
-  notes.push(`${shots.length} screenshots within their caps`);
-  return notes;
+  };
+  walk(appDir, "");
+  return { entries, bytes, longestPath };
 }
 
-function main(): void {
-  mkdirSync(outDir, { recursive: true });
-  const appFiles = copyTree(join(root, "app"), join(outDir, "app"));
-  let shotFiles = 0;
-  const shotsFrom = join(root, "screenshots");
-  if (existsSync(shotsFrom)) {
-    shotFiles = copyTree(shotsFrom, join(outDir, "screenshots"));
+// Post-delivery audit: the app's index page must be present, the app tree
+// must fit its count/byte/path caps, the screenshot count and each
+// screenshot's weight and sides must sit inside the caps, and the dossier
+// must fit its own cap. Throws on the first violation.
+function audit(dossierBytes: number): string {
+  const appDir = join(target, "app");
+  if (!existsSync(join(appDir, "index.html"))) {
+    throw new Error("audit: app/index.html missing from the delivered tree");
   }
-  const dossier = buildDossier(outDir, {
-    text_max_bytes: GATE.dossierTextBytes,
-    screenshots: { max: GATE.shotCount[1], max_bytes: GATE.shotBytes },
-    app_max_files: GATE.appEntries,
-    app_max_bytes: GATE.appBytes,
-    app_path_max_bytes: GATE.appPathBytes,
+  const survey = surveyApp(appDir);
+  if (survey.entries > CAPS.appFiles) {
+    throw new Error(`audit: app/ holds ${survey.entries} entries, over the ${CAPS.appFiles} cap`);
+  }
+  if (survey.bytes > CAPS.appBytes) {
+    throw new Error(`audit: app/ weighs ${survey.bytes} bytes, over the ${CAPS.appBytes}-byte cap`);
+  }
+  if (survey.longestPath > CAPS.appPathBytes) {
+    throw new Error(`audit: longest app path is ${survey.longestPath} bytes, over the ${CAPS.appPathBytes}-byte cap`);
+  }
+  const shots = readdirSync(join(target, "screenshots")).filter((n) => !n.startsWith("."));
+  if (shots.length < CAPS.shotsMin || shots.length > CAPS.shotsMax) {
+    throw new Error(`audit: expected ${CAPS.shotsMin}-${CAPS.shotsMax} screenshots, found ${shots.length}`);
+  }
+  for (const name of shots) {
+    const path = join(target, "screenshots", name);
+    const weight = statSync(path).size;
+    if (weight > CAPS.shotBytes) {
+      throw new Error(`audit: ${name} is ${weight} bytes, over the ${CAPS.shotBytes}-byte cap`);
+    }
+    const size = pixelSize(path);
+    if (!size) throw new Error(`audit: ${name} is neither a readable PNG nor JPEG`);
+    const long = Math.max(size.w, size.h);
+    const short = Math.min(size.w, size.h);
+    if (long > CAPS.shotLong || short < CAPS.shotShort) {
+      throw new Error(`audit: ${name} measures ${size.w}x${size.h}, outside the side limits`);
+    }
+  }
+  if (dossierBytes > CAPS.dossierBytes) {
+    throw new Error(`audit: dossier.json is ${dossierBytes} bytes, over the ${CAPS.dossierBytes}-byte cap`);
+  }
+  return `${shots.length} screenshots inside their caps`;
+}
+
+function deliver(): void {
+  mkdirSync(target, { recursive: true });
+  const appCount = mirror(join(here, "app"), join(target, "app"));
+  let shotCount = 0;
+  const shotsFrom = join(here, "screenshots");
+  if (existsSync(shotsFrom)) shotCount = mirror(shotsFrom, join(target, "screenshots"));
+  const dossier = buildDossier(target, {
+    text_max_bytes: CAPS.textBytes,
+    screenshots: { max: CAPS.shotsMax, max_bytes: CAPS.shotBytes },
+    app_max_files: CAPS.appFiles,
+    app_max_bytes: CAPS.appBytes,
+    app_path_max_bytes: CAPS.appPathBytes,
   });
-  writeFileSync(join(outDir, "dossier.json"), dossier);
-  const notes = checkHandedIn(dossier.length);
+  writeFileSync(join(target, "dossier.json"), dossier);
+  const verdict = audit(dossier.length);
   console.log(
-    `ViceFrame handed in: ${appFiles} app files, ${shotFiles} screenshots, ` +
-      `dossier.json ${dossier.length} bytes -> ${outDir} (${notes.join("; ")})`,
+    `ViceFrame delivered: ${appCount} app files, ${shotCount} screenshots, ` +
+      `dossier.json ${dossier.length} bytes -> ${target} (${verdict})`,
   );
 }
 
-main();
+deliver();
