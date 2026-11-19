@@ -3,35 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ViceFrame Cover Studio — poster-style cover art from your photos</title>
+<title>ViceFrame Cover Studio — turn a photo into poster-style cover art</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark">VF</span>
-    <span class="brand-name">VICEFRAME</span>
-    <span class="brand-sub">cover studio</span>
+<header class="masthead">
+  <div class="wordmark">
+    <span class="wordmark-badge">VF</span>
+    <span class="wordmark-name">VICEFRAME</span>
+    <span class="wordmark-sub">cover studio</span>
   </div>
-  <div class="top-actions">
-    <label class="btn" for="fileInput">Add photos</label>
+  <div class="masthead-actions">
+    <label class="button" for="fileInput">Add photos</label>
     <input id="fileInput" type="file" accept="image/*" multiple hidden>
-    <button id="shuffleBtn" class="btn" type="button">Shuffle panels</button>
-    <button id="downloadBtn" class="btn primary" type="button">Download PNG</button>
+    <button id="shuffleBtn" class="button" type="button">Shuffle panels</button>
+    <button id="downloadBtn" class="button go" type="button">Download PNG</button>
   </div>
 </header>
 
-<main class="layout">
-  <aside class="controls">
-    <section class="group">
+<div class="workbench">
+  <aside class="panel-rail">
+    <section class="card">
       <h2>Photos</h2>
       <div id="photoStrip" class="photo-strip"></div>
-      <p class="note">Drop photos anywhere on this window, or add them above. They are read on this
-      machine only — nothing is uploaded. The two framed scenes and the two painted scenes are built in,
-      so the studio works before you add a photo of your own.</p>
+      <p class="fineprint">Drop photos anywhere on this window, or add them with the button above.
+      They are read on this machine only and never uploaded. Two framed sample scenes and two
+      scenes the studio paints itself are built in, so a cover can be made before you add
+      a photo of your own.</p>
     </section>
 
-    <section class="group">
+    <section class="card">
       <h2>Layout</h2>
       <div class="seg" id="layoutSeg">
         <button type="button" data-layout="hero" class="on">Hero + 3</button>
@@ -41,7 +42,7 @@
       </div>
     </section>
 
-    <section class="group">
+    <section class="card">
       <h2>Colour grade</h2>
       <div class="seg" id="gradeSeg">
         <button type="button" data-grade="sunset" class="on">Vice sunset</button>
@@ -49,13 +50,13 @@
         <button type="button" data-grade="golden">Golden hour</button>
         <button type="button" data-grade="chrome">Chrome noon</button>
       </div>
-      <label class="row"><span>Grade strength</span>
+      <label class="slider-row"><span>Grade strength</span>
         <input id="gradeRange" type="range" min="0" max="100" value="80"></label>
-      <label class="check"><input id="grainCheck" type="checkbox" checked> Film grain</label>
-      <label class="check"><input id="vignetteCheck" type="checkbox" checked> Vignette</label>
+      <label class="tick"><input id="grainCheck" type="checkbox" checked> Film grain</label>
+      <label class="tick"><input id="vignetteCheck" type="checkbox" checked> Vignette</label>
     </section>
 
-    <section class="group">
+    <section class="card">
       <h2>Lettering</h2>
       <label class="field"><span>Title</span>
         <input id="titleInput" type="text" value="VICE FRAME" maxlength="24"></label>
@@ -63,37 +64,37 @@
         <input id="subtitleInput" type="text" value="neon coast stories" maxlength="40"></label>
       <label class="field"><span>Caption</span>
         <input id="captionInput" type="text" value="ONE CITY. NO BRAKES." maxlength="60"></label>
-      <label class="row"><span>Heat stars</span>
+      <label class="slider-row"><span>Heat stars</span>
         <input id="starsRange" type="range" min="0" max="5" step="1" value="5"></label>
     </section>
 
-    <section class="group">
+    <section class="card">
       <h2>Selected panel</h2>
-      <p class="note" id="panelLabel">Panel 1 of 4 — click a panel on the cover, drag it to position its photo.</p>
-      <label class="row"><span>Zoom</span>
+      <p class="fineprint" id="panelLabel">Panel 1 of 4 — click a panel on the cover, then drag to position its photo.</p>
+      <label class="slider-row"><span>Zoom</span>
         <input id="zoomRange" type="range" min="100" max="300" value="100"></label>
       <label class="field"><span>Photo in this panel</span>
         <select id="panelPhotoSelect"></select></label>
-      <button id="fillAllBtn" class="btn wide" type="button">Fill every panel with this photo</button>
+      <button id="fillAllBtn" class="button block" type="button">Fill every panel with this photo</button>
     </section>
 
-    <section class="group">
+    <section class="card">
       <h2>Export size</h2>
       <div class="seg" id="sizeSeg">
         <button type="button" data-size="square">1080 × 1080</button>
         <button type="button" data-size="portrait" class="on">1080 × 1350</button>
         <button type="button" data-size="wide">1920 × 1080</button>
       </div>
-      <p class="note">One click exports a PNG at the full size. Your photos never leave this machine:
-      the studio runs entirely from its own files, offline.</p>
+      <p class="fineprint">One click writes a PNG at the full size. The studio runs entirely
+      from its own files, offline — your photos never leave this machine.</p>
     </section>
   </aside>
 
   <section class="stage" id="stage">
     <canvas id="stageCanvas" width="864" height="1080"></canvas>
-    <p class="hint">Drag on the cover to position the selected panel's photo. Scroll over a panel to zoom it.</p>
+    <p class="stage-hint">Drag on the cover to position the selected panel's photo. Scroll over a panel to zoom it.</p>
   </section>
-</main>
+</div>
 
 <script type="module" src="app.js"></script>
 </body>

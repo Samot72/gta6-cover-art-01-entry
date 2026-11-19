@@ -2,58 +2,76 @@
 [![rank](https://make.fun/badge/gta6-cover-art-01/Samot72/gta6-cover-art-01-entry/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 [![reward](https://make.fun/badge/gta6-cover-art-01/Samot72/gta6-cover-art-01-entry/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 
-# ViceFrame Cover Studio — GTA-style cover art from your own photos
+# ViceFrame Cover Studio — poster-style cover art from your own photos
 
-A make.fun entry for [gta6-cover-art-01](https://make.fun/bounty/gta6-cover-art-01): an offline
-browser app that turns a photo and a caption into multi-panel, poster-style cover art with a
-Vice City sunset/neon grade, exported as a PNG in the common post sizes. Everything is original —
-no Rockstar Games logo, artwork or fonts; the lettering is drawn with system fonts, and the two
-built-in scenes are painted by the app itself on a canvas.
+An entry for make.fun's [gta6-cover-art-01](https://make.fun/bounty/gta6-cover-art-01).
+ViceFrame is a small web app that takes a photo and a caption and lays them out as
+multi-panel poster-style cover art — a tall hero panel with a stack beside it, a
+sunset-to-neon colour grade, big condensed lettering — then exports the result as a
+PNG in the sizes people actually post. It runs entirely in the browser from its own
+static files: no server, no uploads, no network requests, and your photos stay on
+your machine.
 
-## Run it
+Everything in the entry is its own work. There is no Rockstar Games logo, artwork or
+font anywhere; the lettering is set in system font stacks, and the demo artwork is
+painted by the app itself on a canvas.
 
-Serve `app/` with any static file server and open it in a desktop browser, for example:
+## Trying it
+
+Serve the `app/` folder with any static file server and open it in a desktop browser:
 
 ```
-cd app && python3 -m http.server 8080   # then open http://localhost:8080
+cd app && python3 -m http.server 8080
+# then visit http://localhost:8080
 ```
 
-No build step, no network requests: photos are read on your own machine and never uploaded.
-The studio opens with two framed sample scenes loaded, plus two painted scenes it draws live,
-so it makes a cover before you add a photo of your own.
+There is nothing to build. The studio starts with four pictures already loaded —
+two framed sample scenes it ships, and two scenes it paints live (a sunset
+boulevard and a neon street) — so you can make a first cover before adding a
+photo of your own.
 
-## Controls
+## What the controls do
 
-- **Add photos** (button, file picker, or drag & drop anywhere on the window) — each photo joins
-  the strip and fills the selected panel.
-- **Layout** — Hero + 3, Grid of 4, Triptych, or Full bleed panel arrangements.
-- **Colour grade** — Vice sunset, Neon night, Golden hour, or Chrome noon, with a strength
-  slider, film grain and vignette toggles. Neighbouring panels get a cooler counterpoint grade,
-  the multi-panel poster feel.
-- **Lettering** — a sunset-gradient condensed title, a neon script subtitle, a caption bar along
-  the bottom, and a 0–5 heat-star row.
-- **Selected panel** — click a panel on the cover to select it; drag to position its photo,
-  scroll over it (or use the Zoom slider) to crop in, pick its photo from the list, fill every
-  panel with one photo, or shuffle the panels.
-- **Export size + Download PNG** — 1080 × 1080, 1080 × 1350, or 1920 × 1080, written in one click.
+- **Add photos** — the button, the file picker, or drag & drop onto the window.
+  A photo you add goes straight into the selected panel.
+- **Layout** — Hero + 3, Grid of 4, Triptych or Full bleed.
+- **Colour grade** — Vice sunset, Neon night, Golden hour or Chrome noon, with a
+  strength slider plus film grain and vignette switches. Alternate panels are
+  dealt a cooler counterpoint grade, which is what gives the printed multi-panel
+  feel.
+- **Lettering** — a sunset-gradient title in a condensed stack, a neon script
+  subtitle tucked under it, a caption strip along the bottom edge, and a row of
+  0–5 heat stars.
+- **Selected panel** — click a panel on the cover to select it; drag on the cover
+  to position its photo, scroll over a panel (or use the Zoom slider) to crop,
+  swap its photo from the list, fill every panel with one photo, or shuffle the
+  panels around.
+- **Export size, then Download PNG** — 1080 × 1080, 1080 × 1350 or 1920 × 1080,
+  written at full size in one click.
 
-## Hand in (the entry program)
+## How the entry is handed in
 
-`main.ts` (Node 22, standard library only) copies `app/` and `screenshots/` to the output
-directory and writes `dossier.json` there with `buildDossier` from `vendor/makefun-app.ts`,
-then reads the output back and verifies it (index.html present, 3–4 screenshots within the
-256 KiB cap, dossier under 1.5 MiB):
+`main.ts` is the entry program (Node 22, standard library only). It copies `app/`
+and `screenshots/` into the output directory and writes a `dossier.json` there
+using `buildDossier` from the vendored library in `vendor/makefun-app.ts`, then
+reads its own output back and checks it: the app's index page is present, there
+are 3–4 screenshots, each within the byte and pixel-side limits, and the dossier
+is under its size cap. Outside the grader, `MAKEFUN_OUTPUT_DIR` stands in for
+`/output`:
 
 ```
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
 
-## Layout of this repository
+## What's in the repository
 
-- `app/index.html`, `app/style.css` — the editor page and its styling.
-- `app/cover.js` — the cover engine: painted scenes, panel layouts, colour grades, lettering.
-- `app/app.js` — the editor wiring: photos, panels, drag/zoom, live preview, PNG export.
-- `app/samples/` — two framed sample scenes the studio ships and loads as photos.
-- `screenshots/` — the studio with a photo loaded, and covers it exported (wide, square, portrait).
-- `vendor/makefun-app.ts` — the kit's dossier library, unchanged.
+- `app/index.html` and `app/style.css` — the editor page and its styling.
+- `app/cover.js` — the cover engine: panel layouts, colour grades, lettering,
+  grain and vignette, and the two scenes the studio paints for itself.
+- `app/app.js` — the editor: picture loading, panel selection, drag and zoom,
+  the live preview and the PNG export.
+- `app/samples/` — the two framed sample scenes the studio ships.
+- `screenshots/` — the studio with a photo loaded, and covers it exported
+  (wide, square and portrait).
+- `vendor/makefun-app.ts` — the kit's dossier library, byte for byte unchanged.
 - `LICENSE` — MIT.

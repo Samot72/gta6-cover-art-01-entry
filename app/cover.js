@@ -1,471 +1,575 @@
-// ViceFrame cover engine: painted demo scenes, panel layouts, colour grades and the
-// lettering that turns a photo into poster-style cover art. Pure canvas 2D, no assets,
-// no network. A "source" here is { w, h, draw(g, x, y, w, h) }: something that can be
-// painted stretched into a rectangle (a photo image, or one of the painted scenes).
+// cover.js — the drawing half of ViceFrame Cover Studio.
+//
+// Everything the finished cover is made of lives here: the panel layouts,
+// the four colour grades, the lettering, and two scenes the studio paints
+// for itself so it can make a cover before the reader adds a photo. Pure
+// Canvas 2D, no image assets, no network.
+//
+// A "picture" in this file is a plain object { width, height, paint } where
+// paint(ctx, x, y, w, h) draws the picture stretched into that rectangle.
+// Photos and painted scenes both honour that shape, so the cover renderer
+// never needs to know which it is holding.
 
 export const EXPORT_SIZES = {
-  square: [1080, 1080],
-  portrait: [1080, 1350],
-  wide: [1920, 1080],
+  square: { w: 1080, h: 1080 },
+  portrait: { w: 1080, h: 1350 },
+  wide: { w: 1920, h: 1080 },
 };
 
-// Colour grades: a vertical wash of translucent stops plus a soft-light tint. The alt
-// stops give neighbouring panels a cooler counterpoint, the multi-panel poster feel.
+// ---------------------------------------------------------------- grades --
+// Each grade is a top-to-bottom wash of translucent colour plus a soft-light
+// tint. `counter` is the cooler variant dealt to every second panel, which
+// is what makes a multi-panel cover feel printed rather than filtered.
+
 export const GRADES = {
   sunset: {
-    stops: [[0, 'rgba(46,4,84,0.42)'], [0.42, 'rgba(232,44,124,0.20)'], [0.75, 'rgba(255,110,48,0.22)'], [1, 'rgba(30,4,40,0.34)']],
-    alt: [[0, 'rgba(4,40,84,0.40)'], [0.45, 'rgba(24,120,160,0.18)'], [0.8, 'rgba(255,110,48,0.16)'], [1, 'rgba(24,2,44,0.34)']],
-    tint: 'rgba(255,120,60,0.16)',
+    wash: [[0, "rgba(38,6,74,0.44)"], [0.4, "rgba(219,39,119,0.20)"], [0.72, "rgba(249,115,22,0.24)"], [1, "rgba(24,4,36,0.36)"]],
+    counter: [[0, "rgba(6,32,74,0.42)"], [0.45, "rgba(14,116,144,0.18)"], [0.8, "rgba(249,115,22,0.15)"], [1, "rgba(20,2,40,0.36)"]],
+    tint: "rgba(255,110,64,0.15)",
   },
   neon: {
-    stops: [[0, 'rgba(2,10,40,0.46)'], [0.5, 'rgba(10,90,110,0.20)'], [0.8, 'rgba(255,45,140,0.20)'], [1, 'rgba(2,4,24,0.4)']],
-    alt: [[0, 'rgba(30,2,54,0.44)'], [0.5, 'rgba(150,30,140,0.18)'], [0.85, 'rgba(20,200,190,0.16)'], [1, 'rgba(2,4,24,0.4)']],
-    tint: 'rgba(40,200,220,0.14)',
+    wash: [[0, "rgba(3,10,38,0.48)"], [0.5, "rgba(8,84,104,0.20)"], [0.82, "rgba(240,46,130,0.20)"], [1, "rgba(2,4,22,0.42)"]],
+    counter: [[0, "rgba(28,3,52,0.46)"], [0.5, "rgba(140,28,132,0.18)"], [0.85, "rgba(16,190,178,0.16)"], [1, "rgba(2,4,22,0.42)"]],
+    tint: "rgba(38,198,218,0.13)",
   },
   golden: {
-    stops: [[0, 'rgba(70,30,4,0.30)'], [0.5, 'rgba(255,170,60,0.16)'], [1, 'rgba(50,16,2,0.36)']],
-    alt: [[0, 'rgba(50,36,4,0.32)'], [0.55, 'rgba(255,190,80,0.14)'], [1, 'rgba(40,20,2,0.36)']],
-    tint: 'rgba(255,180,70,0.18)',
+    wash: [[0, "rgba(66,28,3,0.30)"], [0.52, "rgba(251,166,44,0.16)"], [1, "rgba(46,15,2,0.38)"]],
+    counter: [[0, "rgba(48,34,3,0.32)"], [0.55, "rgba(253,186,76,0.14)"], [1, "rgba(38,18,2,0.38)"]],
+    tint: "rgba(255,176,66,0.17)",
   },
   chrome: {
-    stops: [[0, 'rgba(10,20,50,0.26)'], [0.55, 'rgba(120,180,255,0.10)'], [1, 'rgba(8,8,20,0.30)']],
-    alt: [[0, 'rgba(40,10,50,0.26)'], [0.55, 'rgba(255,120,190,0.10)'], [1, 'rgba(8,8,20,0.30)']],
-    tint: 'rgba(160,200,255,0.12)',
+    wash: [[0, "rgba(9,18,46,0.27)"], [0.55, "rgba(110,168,250,0.10)"], [1, "rgba(7,7,18,0.31)"]],
+    counter: [[0, "rgba(38,9,48,0.27)"], [0.55, "rgba(250,110,180,0.10)"], [1, "rgba(7,7,18,0.31)"]],
+    tint: "rgba(150,196,255,0.11)",
   },
 };
 
-// Panel rectangles for each layout, as fractions resolved against the cover size.
-export function panelRects(layout, W, H) {
-  const F = (x, y, w, h) => ({ x: x * W, y: y * H, w: w * W, h: h * H });
-  switch (layout) {
-    case 'grid':
-      return [F(0, 0, 0.5, 0.5), F(0.5, 0, 0.5, 0.5), F(0, 0.5, 0.5, 0.5), F(0.5, 0.5, 0.5, 0.5)];
-    case 'triptych':
-      return [F(0, 0, 1 / 3, 1), F(1 / 3, 0, 1 / 3, 1), F(2 / 3, 0, 1 / 3, 1)];
-    case 'full':
-      return [F(0, 0, 1, 1)];
-    case 'hero':
-    default:
-      return [F(0, 0, 0.62, 1), F(0.62, 0, 0.38, 1 / 3), F(0.62, 1 / 3, 0.38, 1 / 3), F(0.62, 2 / 3, 0.38, 1 / 3)];
+// --------------------------------------------------------------- layouts --
+// Panel rectangles as fractions of the cover, so one layout works at the
+// preview size and at every export size.
+
+export function layoutPanels(layout, W, H) {
+  const R = (fx, fy, fw, fh) => ({ x: fx * W, y: fy * H, w: fw * W, h: fh * H });
+  if (layout === "grid") {
+    return [R(0, 0, 0.5, 0.5), R(0.5, 0, 0.5, 0.5), R(0, 0.5, 0.5, 0.5), R(0.5, 0.5, 0.5, 0.5)];
   }
+  if (layout === "triptych") {
+    return [R(0, 0, 1 / 3, 1), R(1 / 3, 0, 1 / 3, 1), R(2 / 3, 0, 1 / 3, 1)];
+  }
+  if (layout === "full") {
+    return [R(0, 0, 1, 1)];
+  }
+  // "hero": one tall panel on the left, a stack of three on the right.
+  return [R(0, 0, 0.6, 1), R(0.6, 0, 0.4, 1 / 3), R(0.6, 1 / 3, 0.4, 1 / 3), R(0.6, 2 / 3, 0.4, 1 / 3)];
 }
 
-// Small deterministic random source so the painted scenes render identically every time.
-function mulberry32(seed) {
-  let a = seed >>> 0;
+// ------------------------------------------------------------- randomness --
+// A tiny linear congruential generator. The painted scenes seed it with a
+// fixed number so they come out identical on every machine and every run.
+
+function lcg(seed) {
+  let s = seed % 2147483648;
+  if (s <= 0) s += 2147483647;
   return () => {
-    a = (a + 0x6D2B79F5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    s = (s * 1103515245 + 12345) % 2147483648;
+    return s / 2147483648;
   };
 }
 
-// A standing figure in flat silhouette: head, jacket torso, a wide stance, one arm bent.
-export function drawFigure(g, x, y, s, color) {
-  g.save();
-  g.fillStyle = color;
-  g.strokeStyle = color;
-  g.lineCap = 'round';
-  g.beginPath();
-  g.arc(x, y - 0.9 * s, 0.075 * s, 0, Math.PI * 2);
-  g.fill();
-  g.beginPath(); // torso: shoulders to hips
-  g.moveTo(x - 0.11 * s, y - 0.82 * s);
-  g.lineTo(x + 0.11 * s, y - 0.82 * s);
-  g.lineTo(x + 0.085 * s, y - 0.46 * s);
-  g.lineTo(x - 0.085 * s, y - 0.46 * s);
-  g.closePath();
-  g.fill();
-  g.lineWidth = 0.085 * s; // legs, planted apart
-  g.beginPath();
-  g.moveTo(x - 0.04 * s, y - 0.47 * s); g.lineTo(x - 0.13 * s, y);
-  g.moveTo(x + 0.04 * s, y - 0.47 * s); g.lineTo(x + 0.15 * s, y);
-  g.stroke();
-  g.lineWidth = 0.07 * s; // arms: one hanging, one bent at the waist
-  g.beginPath();
-  g.moveTo(x - 0.1 * s, y - 0.8 * s); g.lineTo(x - 0.17 * s, y - 0.44 * s);
-  g.moveTo(x + 0.1 * s, y - 0.8 * s); g.lineTo(x + 0.19 * s, y - 0.62 * s); g.lineTo(x + 0.12 * s, y - 0.5 * s);
-  g.stroke();
-  g.restore();
+// ------------------------------------------------------------- silhouettes --
+// Flat black shapes the painted scenes are built from. `u` is a unit: the
+// figure is about 1.0u tall, the palm about 1.0u tall, the car 1.0u long.
+
+export function silhouetteFigure(ctx, cx, groundY, u, colour) {
+  ctx.save();
+  ctx.fillStyle = colour;
+  ctx.strokeStyle = colour;
+  ctx.lineCap = "round";
+  // head
+  ctx.beginPath();
+  ctx.arc(cx, groundY - 0.92 * u, 0.07 * u, 0, Math.PI * 2);
+  ctx.fill();
+  // jacket: a tapered block from shoulders to hips
+  ctx.beginPath();
+  ctx.moveTo(cx - 0.115 * u, groundY - 0.86 * u);
+  ctx.lineTo(cx + 0.115 * u, groundY - 0.86 * u);
+  ctx.lineTo(cx + 0.08 * u, groundY - 0.48 * u);
+  ctx.lineTo(cx - 0.08 * u, groundY - 0.48 * u);
+  ctx.closePath();
+  ctx.fill();
+  // legs in a wide stance
+  ctx.lineWidth = 0.08 * u;
+  ctx.beginPath();
+  ctx.moveTo(cx - 0.035 * u, groundY - 0.5 * u);
+  ctx.lineTo(cx - 0.14 * u, groundY);
+  ctx.moveTo(cx + 0.035 * u, groundY - 0.5 * u);
+  ctx.lineTo(cx + 0.16 * u, groundY);
+  ctx.stroke();
+  // arms: left hangs, right bends up at the elbow
+  ctx.lineWidth = 0.065 * u;
+  ctx.beginPath();
+  ctx.moveTo(cx - 0.105 * u, groundY - 0.83 * u);
+  ctx.lineTo(cx - 0.18 * u, groundY - 0.47 * u);
+  ctx.moveTo(cx + 0.105 * u, groundY - 0.83 * u);
+  ctx.lineTo(cx + 0.2 * u, groundY - 0.66 * u);
+  ctx.lineTo(cx + 0.13 * u, groundY - 0.53 * u);
+  ctx.stroke();
+  ctx.restore();
 }
 
-// A palm in flat silhouette: a curved trunk and six swept fronds.
-export function drawPalm(g, x, y, s, color, lean = 0.2) {
-  g.save();
-  g.strokeStyle = color;
-  g.fillStyle = color;
-  g.lineCap = 'round';
-  const topX = x + lean * s;
-  const topY = y - s;
-  g.lineWidth = 0.055 * s;
-  g.beginPath();
-  g.moveTo(x, y);
-  g.quadraticCurveTo(x + lean * s * 0.3, y - s * 0.55, topX, topY);
-  g.stroke();
-  g.lineWidth = 0.045 * s;
-  for (let i = 0; i < 6; i++) {
-    const a = Math.PI * (0.08 + i * 0.17);
-    const ex = topX + Math.cos(a) * 0.52 * s * (i % 2 ? 1 : -1) * (i === 0 ? 0.4 : 1);
-    const ey = topY - Math.sin(a) * 0.3 * s + 0.16 * s;
-    g.beginPath();
-    g.moveTo(topX, topY);
-    g.quadraticCurveTo(topX + (ex - topX) * 0.5, topY - 0.22 * s, ex, ey);
-    g.stroke();
+export function silhouettePalm(ctx, baseX, baseY, u, colour, bend = 0.22) {
+  ctx.save();
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineCap = "round";
+  const crownX = baseX + bend * u;
+  const crownY = baseY - u;
+  ctx.lineWidth = 0.05 * u;
+  ctx.beginPath();
+  ctx.moveTo(baseX, baseY);
+  ctx.quadraticCurveTo(baseX + bend * u * 0.25, baseY - u * 0.5, crownX, crownY);
+  ctx.stroke();
+  // fronds: arcs drooping away from the crown in both directions
+  ctx.lineWidth = 0.04 * u;
+  for (let i = 0; i < 7; i++) {
+    const t = i / 6; // 0..1 across the fan
+    const dir = t < 0.5 ? -1 : 1;
+    const reach = (0.24 + 0.3 * Math.sin(t * Math.PI)) * u;
+    const lift = (0.2 - 0.34 * Math.abs(t - 0.5)) * u;
+    ctx.beginPath();
+    ctx.moveTo(crownX, crownY);
+    ctx.quadraticCurveTo(
+      crownX + dir * reach * 0.55, crownY - lift - 0.1 * u,
+      crownX + dir * reach, crownY - lift + 0.14 * u,
+    );
+    ctx.stroke();
   }
-  g.beginPath();
-  g.arc(topX, topY + 0.03 * s, 0.05 * s, 0, Math.PI * 2);
-  g.fill();
-  g.restore();
+  ctx.beginPath();
+  ctx.arc(crownX, crownY + 0.035 * u, 0.045 * u, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
-// A low convertible in flat silhouette with a neon rim light along its top edge.
-export function drawConvertible(g, x, y, s, rim) {
-  g.save();
-  const w = s, h = s * 0.30;
-  g.fillStyle = '#12081f';
-  // Body: one smooth silhouette from nose to tail.
-  g.beginPath();
-  g.moveTo(x, y - h * 0.30);
-  g.quadraticCurveTo(x + w * 0.02, y - h * 0.66, x + w * 0.22, y - h * 0.70);
-  g.lineTo(x + w * 0.34, y - h * 0.70);
-  g.lineTo(x + w * 0.41, y - h * 0.98);
-  g.quadraticCurveTo(x + w * 0.43, y - h * 1.07, x + w * 0.51, y - h * 1.07);
-  g.lineTo(x + w * 0.59, y - h * 1.07);
-  g.lineTo(x + w * 0.67, y - h * 0.72);
-  g.quadraticCurveTo(x + w * 0.97, y - h * 0.68, x + w, y - h * 0.34);
-  g.quadraticCurveTo(x + w, y - h * 0.18, x + w * 0.94, y - h * 0.16);
-  g.lineTo(x + w * 0.06, y - h * 0.16);
-  g.quadraticCurveTo(x, y - h * 0.16, x, y - h * 0.30);
-  g.closePath();
-  g.fill();
-  g.strokeStyle = rim; // rim light
-  g.lineWidth = h * 0.045;
-  g.beginPath();
-  g.moveTo(x + w * 0.02, y - h * 0.62);
-  g.quadraticCurveTo(x + w * 0.2, y - h * 0.72, x + w * 0.34, y - h * 0.72);
-  g.stroke();
-  g.fillStyle = '#0a0514'; // wheels
-  for (const wx of [x + w * 0.22, x + w * 0.8]) {
-    g.beginPath(); g.arc(wx, y - h * 0.14, h * 0.17, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(255,215,106,0.85)'; g.lineWidth = h * 0.03;
-    g.beginPath(); g.arc(wx, y - h * 0.14, h * 0.09, 0, Math.PI * 2); g.stroke();
+export function silhouetteCar(ctx, leftX, groundY, length, rimColour) {
+  const h = length * 0.29;
+  const top = groundY - h;
+  ctx.save();
+  ctx.fillStyle = "#10071c";
+  // one path for the whole body: nose, hood, windshield, roofline, tail
+  ctx.beginPath();
+  ctx.moveTo(leftX, groundY - h * 0.34);
+  ctx.quadraticCurveTo(leftX + length * 0.03, groundY - h * 0.62, leftX + length * 0.24, groundY - h * 0.66);
+  ctx.lineTo(leftX + length * 0.37, groundY - h * 0.66);
+  ctx.lineTo(leftX + length * 0.44, top);
+  ctx.quadraticCurveTo(leftX + length * 0.47, top - h * 0.09, leftX + length * 0.54, top - h * 0.09);
+  ctx.lineTo(leftX + length * 0.6, top - h * 0.09);
+  ctx.lineTo(leftX + length * 0.68, groundY - h * 0.68);
+  ctx.quadraticCurveTo(leftX + length * 0.96, groundY - h * 0.64, leftX + length, groundY - h * 0.36);
+  ctx.quadraticCurveTo(leftX + length, groundY - h * 0.2, leftX + length * 0.93, groundY - h * 0.18);
+  ctx.lineTo(leftX + length * 0.07, groundY - h * 0.18);
+  ctx.quadraticCurveTo(leftX, groundY - h * 0.18, leftX, groundY - h * 0.34);
+  ctx.closePath();
+  ctx.fill();
+  // neon rim light tracing the shoulder line
+  ctx.strokeStyle = rimColour;
+  ctx.lineWidth = h * 0.05;
+  ctx.beginPath();
+  ctx.moveTo(leftX + length * 0.04, groundY - h * 0.58);
+  ctx.quadraticCurveTo(leftX + length * 0.2, groundY - h * 0.7, leftX + length * 0.37, groundY - h * 0.69);
+  ctx.stroke();
+  // wheels with a gold ring
+  for (const fx of [0.23, 0.79]) {
+    const wx = leftX + length * fx;
+    const wy = groundY - h * 0.16;
+    ctx.fillStyle = "#08040f";
+    ctx.beginPath();
+    ctx.arc(wx, wy, h * 0.17, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,215,106,0.9)";
+    ctx.lineWidth = h * 0.032;
+    ctx.beginPath();
+    ctx.arc(wx, wy, h * 0.09, 0, Math.PI * 2);
+    ctx.stroke();
   }
-  const glow = g.createRadialGradient(x + w * 0.99, y - h * 0.4, 0, x + w * 0.99, y - h * 0.4, h * 0.5);
-  glow.addColorStop(0, 'rgba(255,240,190,0.8)');
-  glow.addColorStop(1, 'rgba(255,240,190,0)');
-  g.fillStyle = glow;
-  g.fillRect(x + w * 0.6, y - h * 0.95, w * 0.5, h * 1.1);
-  g.restore();
+  // headlight glow at the tail end of the body path (the nose points left here,
+  // so the glow sits at the right where the tail lamp burns)
+  const glow = ctx.createRadialGradient(leftX + length * 0.985, groundY - h * 0.42, 0, leftX + length * 0.985, groundY - h * 0.42, h * 0.55);
+  glow.addColorStop(0, "rgba(255,238,186,0.75)");
+  glow.addColorStop(1, "rgba(255,238,186,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(leftX + length * 0.55, groundY - h * 1.0, length * 0.55, h * 1.15);
+  ctx.restore();
 }
 
-// The built-in boulevard scene: sunset sky, striped sun, skyline, palms, a convertible
-// and a figure on the kerb. Painted fresh at whatever size it is asked for.
-export function paintBoulevard(g, w, h) {
-  const sky = g.createLinearGradient(0, 0, 0, h * 0.86);
-  sky.addColorStop(0, '#2a0a4a');
-  sky.addColorStop(0.34, '#7b1e63');
-  sky.addColorStop(0.55, '#e8447c');
-  sky.addColorStop(0.72, '#ff7a3d');
-  sky.addColorStop(1, '#ffb347');
-  g.fillStyle = sky;
-  g.fillRect(0, 0, w, h * 0.86);
-  const sun = g.createLinearGradient(0, h * 0.34, 0, h * 0.78);
-  sun.addColorStop(0, '#ffe29a');
-  sun.addColorStop(1, '#ff5e3a');
-  g.fillStyle = sun;
-  g.beginPath();
-  g.arc(w * 0.66, h * 0.62, w * 0.155, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = 'rgba(43,10,74,0.55)'; // sun stripes
-  for (let i = 0; i < 4; i++) g.fillRect(w * 0.48, h * (0.63 + i * 0.045), w * 0.36, h * 0.016);
-  const rnd = mulberry32(7);
-  g.fillStyle = '#38145c'; // far skyline
-  let bx = 0;
-  while (bx < w) {
-    const bw = w * (0.04 + rnd() * 0.06), bh = h * (0.1 + rnd() * 0.16);
-    g.fillRect(bx, h * 0.72 - bh, bw, bh);
-    bx += bw + w * 0.012;
+// ----------------------------------------------------------------- scenes --
+// Scene one: a boulevard at sunset — banded sun, two skyline layers, palms,
+// a parked convertible and a figure waiting by it.
+
+export function sceneBoulevard(ctx, W, H) {
+  const horizon = H * 0.85;
+  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, "#27083f");
+  sky.addColorStop(0.35, "#751c5e");
+  sky.addColorStop(0.56, "#e23a76");
+  sky.addColorStop(0.74, "#ff7438");
+  sky.addColorStop(1, "#ffae45");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, horizon);
+  // the sun, clipped by darker bands as it sinks
+  const sunGrad = ctx.createLinearGradient(0, H * 0.33, 0, H * 0.77);
+  sunGrad.addColorStop(0, "#ffe79d");
+  sunGrad.addColorStop(1, "#ff5a36");
+  ctx.fillStyle = sunGrad;
+  ctx.beginPath();
+  ctx.arc(W * 0.64, H * 0.6, W * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(40,9,70,0.5)";
+  for (let i = 0; i < 4; i++) {
+    ctx.fillRect(W * 0.46, H * (0.615 + i * 0.047), W * 0.36, H * 0.015);
   }
-  g.fillStyle = '#1c0b30'; // near blocks
-  g.fillRect(0, h * 0.60, w * 0.16, h * 0.26);
-  g.fillRect(w * 0.86, h * 0.56, w * 0.14, h * 0.30);
-  g.fillStyle = '#14091f'; // road
-  g.fillRect(0, h * 0.86, w, h * 0.14);
-  g.fillStyle = 'rgba(255,183,71,0.5)';
-  g.fillRect(0, h * 0.858, w, h * 0.006);
-  g.strokeStyle = 'rgba(255,215,106,0.75)'; // lane dashes in perspective
-  g.lineWidth = h * 0.008;
-  g.setLineDash([w * 0.05, w * 0.045]);
-  g.beginPath(); g.moveTo(w * 0.06, h * 0.945); g.lineTo(w * 0.44, h * 0.872); g.stroke();
-  g.setLineDash([]);
-  drawPalm(g, w * 0.10, h * 0.88, h * 0.52, '#160a26', 0.25);
-  drawPalm(g, w * 0.90, h * 0.87, h * 0.44, '#160a26', -0.3);
-  drawPalm(g, w * 0.24, h * 0.87, h * 0.34, '#1d0d33', 0.15);
-  drawConvertible(g, w * 0.30, h * 0.965, w * 0.52, '#ff4d8d');
-  drawFigure(g, w * 0.185, h * 0.955, h * 0.34, '#0d0518');
+  // far skyline, seeded so it never changes
+  const rand = lcg(1234);
+  ctx.fillStyle = "#341155";
+  let x = -W * 0.01;
+  while (x < W) {
+    const bw = W * (0.035 + rand() * 0.055);
+    const bh = H * (0.09 + rand() * 0.17);
+    ctx.fillRect(x, H * 0.71 - bh, bw, bh + H * 0.14);
+    x += bw + W * 0.011;
+  }
+  // two near blocks framing the view
+  ctx.fillStyle = "#1a0a2c";
+  ctx.fillRect(0, H * 0.58, W * 0.15, H * 0.28);
+  ctx.fillRect(W * 0.87, H * 0.54, W * 0.13, H * 0.32);
+  // road with a kerb line and one perspective lane marking
+  ctx.fillStyle = "#120820";
+  ctx.fillRect(0, horizon, W, H - horizon);
+  ctx.fillStyle = "rgba(255,183,71,0.55)";
+  ctx.fillRect(0, horizon - H * 0.004, W, H * 0.007);
+  ctx.strokeStyle = "rgba(255,215,106,0.8)";
+  ctx.lineWidth = H * 0.008;
+  ctx.setLineDash([W * 0.05, W * 0.04]);
+  ctx.beginPath();
+  ctx.moveTo(W * 0.05, H * 0.95);
+  ctx.lineTo(W * 0.42, H * 0.868);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  silhouettePalm(ctx, W * 0.09, H * 0.875, H * 0.5, "#140826", 0.26);
+  silhouettePalm(ctx, W * 0.91, H * 0.865, H * 0.42, "#140826", -0.3);
+  silhouettePalm(ctx, W * 0.23, H * 0.868, H * 0.32, "#1c0c31", 0.14);
+  silhouetteCar(ctx, W * 0.29, H * 0.962, W * 0.53, "#ff4d8d");
+  silhouetteFigure(ctx, W * 0.175, H * 0.952, H * 0.335, "#0c0516");
 }
 
-// The built-in neon street scene: teal night, lit windows, glowing signs, wet street.
-export function paintNeonStreet(g, w, h) {
-  const sky = g.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#04182b');
-  sky.addColorStop(0.55, '#07304a');
-  sky.addColorStop(1, '#0a4a5e');
-  g.fillStyle = sky;
-  g.fillRect(0, 0, w, h);
-  g.fillStyle = 'rgba(230,246,255,0.9)';
-  g.beginPath(); g.arc(w * 0.84, h * 0.13, w * 0.028, 0, Math.PI * 2); g.fill();
-  const rnd = mulberry32(23);
-  const block = (x, bw, bh, base) => {
-    g.fillStyle = base;
-    g.fillRect(x, h * 0.78 - bh, bw, bh);
-    const cols = Math.max(2, Math.floor(bw / (w * 0.028)));
-    const rows = Math.max(3, Math.floor(bh / (h * 0.05)));
-    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
-      if (rnd() < 0.42) continue;
-      g.fillStyle = rnd() < 0.6 ? 'rgba(255,215,106,0.85)' : 'rgba(125,252,232,0.8)';
-      g.fillRect(x + (c + 0.5) * (bw / cols) - w * 0.006, h * 0.78 - bh + (r + 0.5) * (bh / rows) - h * 0.008, w * 0.012, h * 0.016);
+// Scene two: a neon street after rain — towers with lit windows, glowing
+// signs, and their colours smeared down the wet pavement.
+
+export function sceneNeon(ctx, W, H) {
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#031525");
+  sky.addColorStop(0.55, "#062c46");
+  sky.addColorStop(1, "#094657");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(226,244,255,0.92)";
+  ctx.beginPath();
+  ctx.arc(W * 0.85, H * 0.12, W * 0.026, 0, Math.PI * 2);
+  ctx.fill();
+  const rand = lcg(777);
+  const tower = (tx, tw, th, shade) => {
+    const base = H * 0.77;
+    ctx.fillStyle = shade;
+    ctx.fillRect(tx, base - th, tw, th);
+    const cols = Math.max(2, Math.floor(tw / (W * 0.03)));
+    const rows = Math.max(3, Math.floor(th / (H * 0.052)));
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        if (rand() < 0.45) continue;
+        ctx.fillStyle = rand() < 0.62 ? "rgba(255,213,102,0.85)" : "rgba(120,250,230,0.8)";
+        ctx.fillRect(
+          tx + (c + 0.5) * (tw / cols) - W * 0.006,
+          base - th + (r + 0.5) * (th / rows) - H * 0.008,
+          W * 0.012, H * 0.016,
+        );
+      }
     }
   };
-  block(0, w * 0.24, h * 0.62, '#06121f');
-  block(w * 0.27, w * 0.17, h * 0.44, '#081a2a');
-  block(w * 0.60, w * 0.16, h * 0.52, '#071626');
-  block(w * 0.79, w * 0.21, h * 0.68, '#050f1a');
-  const sign = (x, y, sw, sh, color) => {
-    g.save();
-    g.shadowColor = color; g.shadowBlur = w * 0.02;
-    g.strokeStyle = color; g.lineWidth = h * 0.006;
-    g.beginPath(); g.roundRect(x, y, sw, sh, h * 0.012); g.stroke();
-    g.fillStyle = color; g.globalAlpha = 0.85;
-    for (let i = 0; i < 3; i++) g.fillRect(x + sw * 0.14, y + sh * (0.22 + i * 0.24), sw * (0.72 - i * 0.14), sh * 0.1);
-    g.restore();
-  };
-  sign(w * 0.035, h * 0.24, w * 0.15, h * 0.15, '#ff4d8d');
-  sign(w * 0.815, h * 0.18, w * 0.14, h * 0.19, '#2ee6c8');
-  sign(w * 0.625, h * 0.33, w * 0.11, h * 0.11, '#ff9a3d');
-  const street = g.createLinearGradient(0, h * 0.78, 0, h);
-  street.addColorStop(0, '#06222e');
-  street.addColorStop(1, '#020a12');
-  g.fillStyle = street;
-  g.fillRect(0, h * 0.78, w, h * 0.22);
-  const smear = (x, color, len) => {
-    const gr = g.createLinearGradient(0, h * 0.79, 0, h * 0.79 + len);
-    gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr;
-    g.fillRect(x, h * 0.79, w * 0.016, len);
-  };
-  smear(w * 0.09, 'rgba(255,77,141,0.5)', h * 0.17);
-  smear(w * 0.87, 'rgba(46,230,200,0.45)', h * 0.19);
-  smear(w * 0.66, 'rgba(255,154,61,0.4)', h * 0.13);
-  smear(w * 0.45, 'rgba(255,215,106,0.28)', h * 0.2);
-  drawPalm(g, w * 0.52, h * 0.86, h * 0.4, '#03101c', 0.3);
-  drawFigure(g, w * 0.36, h * 0.97, h * 0.36, '#020910');
-  drawConvertible(g, w * 0.56, h * 0.99, w * 0.4, '#2ee6c8');
-}
-
-// Paint one of the built-in scenes by name.
-export function paintScene(g, w, h, variant) {
-  if (variant === 'neon') paintNeonStreet(g, w, h);
-  else paintBoulevard(g, w, h);
-}
-
-// A source backed by a painted scene, rendered once onto an offscreen canvas.
-export function makeSceneSource(variant, w = 1200, h = 900) {
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  paintScene(canvas.getContext('2d'), w, h, variant);
-  return { w, h, name: variant === 'neon' ? 'Painted scene: neon street' : 'Painted scene: boulevard', draw(g, x, y, dw, dh) { g.drawImage(canvas, x, y, dw, dh); } };
-}
-
-// A source backed by an image element (a photo, or a framed sample scene).
-export function makeImageSource(img, name) {
-  return { w: img.naturalWidth || img.width, h: img.naturalHeight || img.height, name, draw(g, x, y, dw, dh) { g.drawImage(img, x, y, dw, dh); } };
-}
-
-// The wash of one grade over one panel rectangle.
-function applyGrade(g, r, gradeName, strength, alt) {
-  const grade = GRADES[gradeName] ?? GRADES.sunset;
-  const stops = alt && grade.alt ? grade.alt : grade.stops;
-  g.save();
-  g.globalAlpha = strength;
-  const grad = g.createLinearGradient(0, r.y, 0, r.y + r.h);
-  for (const [at, color] of stops) grad.addColorStop(at, color);
-  g.fillStyle = grad;
-  g.fillRect(r.x, r.y, r.w, r.h);
-  g.globalCompositeOperation = 'soft-light';
-  g.fillStyle = grade.tint;
-  g.fillRect(r.x, r.y, r.w, r.h);
-  g.restore();
-}
-
-let grainPattern = null;
-function getGrainPattern(g) {
-  if (grainPattern) return grainPattern;
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 256;
-  const cg = c.getContext('2d');
-  const img = cg.createImageData(256, 256);
-  const rnd = mulberry32(99);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const v = Math.floor(rnd() * 255);
-    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-    img.data[i + 3] = 255;
-  }
-  cg.putImageData(img, 0, 0);
-  grainPattern = g.createPattern(c, 'repeat');
-  return grainPattern;
-}
-
-function drawStars(g, cx, cy, count, size, color) {
-  g.save();
-  g.fillStyle = color;
-  g.strokeStyle = 'rgba(10,4,20,0.8)';
-  g.lineWidth = size * 0.08;
-  for (let i = 0; i < count; i++) {
-    const x = cx + i * size * 1.25, y = cy;
-    g.beginPath();
-    for (let p = 0; p < 10; p++) {
-      const r = p % 2 === 0 ? size : size * 0.45;
-      const a = -Math.PI / 2 + p * Math.PI / 5;
-      const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
-      if (p === 0) g.moveTo(px, py); else g.lineTo(px, py);
+  tower(0, W * 0.23, H * 0.6, "#051019");
+  tower(W * 0.26, W * 0.17, H * 0.42, "#071726");
+  tower(W * 0.59, W * 0.16, H * 0.5, "#061423");
+  tower(W * 0.78, W * 0.22, H * 0.66, "#040d17");
+  const sign = (sx, sy, sw, sh, colour) => {
+    ctx.save();
+    ctx.shadowColor = colour;
+    ctx.shadowBlur = W * 0.018;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = H * 0.006;
+    ctx.beginPath();
+    ctx.roundRect(sx, sy, sw, sh, H * 0.012);
+    ctx.stroke();
+    ctx.fillStyle = colour;
+    ctx.globalAlpha = 0.85;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(sx + sw * 0.14, sy + sh * (0.22 + i * 0.24), sw * (0.7 - i * 0.13), sh * 0.1);
     }
-    g.closePath(); g.fill(); g.stroke();
-  }
-  g.restore();
+    ctx.restore();
+  };
+  sign(W * 0.033, H * 0.23, W * 0.15, H * 0.15, "#ff4d8d");
+  sign(W * 0.815, H * 0.17, W * 0.14, H * 0.19, "#2ee6c8");
+  sign(W * 0.615, H * 0.32, W * 0.11, H * 0.11, "#ff9a3d");
+  // wet street: a dark base and a fading smear under each light
+  const street = ctx.createLinearGradient(0, H * 0.77, 0, H);
+  street.addColorStop(0, "#052029");
+  street.addColorStop(1, "#020910");
+  ctx.fillStyle = street;
+  ctx.fillRect(0, H * 0.77, W, H * 0.23);
+  const smear = (sx, colour, len) => {
+    const g = ctx.createLinearGradient(0, H * 0.785, 0, H * 0.785 + len);
+    g.addColorStop(0, colour);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx, H * 0.785, W * 0.016, len);
+  };
+  smear(W * 0.085, "rgba(255,77,141,0.5)", H * 0.16);
+  smear(W * 0.865, "rgba(46,230,200,0.45)", H * 0.18);
+  smear(W * 0.655, "rgba(255,154,61,0.4)", H * 0.12);
+  smear(W * 0.44, "rgba(255,215,106,0.26)", H * 0.19);
+  silhouettePalm(ctx, W * 0.52, H * 0.855, H * 0.38, "#020d18", 0.3);
+  silhouetteFigure(ctx, W * 0.35, H * 0.968, H * 0.35, "#02080f");
+  silhouetteCar(ctx, W * 0.57, H * 0.988, W * 0.39, "#2ee6c8");
 }
 
-// Fit a font size down until the text fits maxWidth; returns the size used.
-function fitFont(g, text, weight, family, start, maxWidth) {
-  let size = start;
-  while (size > 10) {
-    g.font = `${weight} ${size}px ${family}`;
-    if (g.measureText(text).width <= maxWidth) break;
-    size *= 0.94;
+export function paintScene(ctx, W, H, which) {
+  if (which === "neon") sceneNeon(ctx, W, H);
+  else sceneBoulevard(ctx, W, H);
+}
+
+// ---------------------------------------------------------------- pictures --
+
+export function paintedPicture(which, w = 1280, h = 960) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  paintScene(c.getContext("2d"), w, h, which);
+  return {
+    width: w,
+    height: h,
+    label: which === "neon" ? "Painted scene — neon street" : "Painted scene — boulevard",
+    paint(ctx, x, y, dw, dh) { ctx.drawImage(c, x, y, dw, dh); },
+  };
+}
+
+export function imagePicture(img, label) {
+  return {
+    width: img.naturalWidth || img.width,
+    height: img.naturalHeight || img.height,
+    label,
+    paint(ctx, x, y, dw, dh) { ctx.drawImage(img, x, y, dw, dh); },
+  };
+}
+
+// ------------------------------------------------------------ grade & fx --
+
+function washPanel(ctx, rect, gradeName, amount, counter) {
+  const grade = GRADES[gradeName] || GRADES.sunset;
+  const stops = counter && grade.counter ? grade.counter : grade.wash;
+  ctx.save();
+  ctx.globalAlpha = amount;
+  const grad = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
+  for (const [at, colour] of stops) grad.addColorStop(at, colour);
+  ctx.fillStyle = grad;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.fillStyle = grade.tint;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
+}
+
+let noiseTile = null;
+function grainFill(ctx) {
+  if (!noiseTile) {
+    noiseTile = document.createElement("canvas");
+    noiseTile.width = 256;
+    noiseTile.height = 256;
+    const nctx = noiseTile.getContext("2d");
+    const data = nctx.createImageData(256, 256);
+    const rand = lcg(4242);
+    for (let i = 0; i < data.data.length; i += 4) {
+      const v = Math.floor(rand() * 256);
+      data.data[i] = v;
+      data.data[i + 1] = v;
+      data.data[i + 2] = v;
+      data.data[i + 3] = 255;
+    }
+    nctx.putImageData(data, 0, 0);
+  }
+  return ctx.createPattern(noiseTile, "repeat");
+}
+
+function star(ctx, cx, cy, r, colour) {
+  ctx.beginPath();
+  for (let p = 0; p < 10; p++) {
+    const rad = p % 2 === 0 ? r : r * 0.46;
+    const a = -Math.PI / 2 + (p * Math.PI) / 5;
+    const px = cx + Math.cos(a) * rad;
+    const py = cy + Math.sin(a) * rad;
+    if (p === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = colour;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(12,4,22,0.85)";
+  ctx.lineWidth = r * 0.09;
+  ctx.stroke();
+}
+
+// Shrink a font size until `text` fits `maxW`; returns the size that fits.
+function shrinkToFit(ctx, text, weight, family, startSize, maxW) {
+  let size = startSize;
+  ctx.font = `${weight} ${size}px ${family}`;
+  while (size > 9 && ctx.measureText(text).width > maxW) {
+    size *= 0.93;
+    ctx.font = `${weight} ${size}px ${family}`;
   }
   return size;
 }
 
-const TITLE_FONT = '"Arial Narrow", "Helvetica Neue Condensed", Impact, "Franklin Gothic Medium", sans-serif';
-const SCRIPT_FONT = '"Brush Script MT", "Segoe Script", "Snell Roundhand", cursive';
-const BODY_FONT = '"Arial Narrow", "Helvetica Neue", Arial, sans-serif';
+const FONT_TITLE = '"Arial Narrow","Helvetica Neue Condensed",Impact,"Franklin Gothic Medium",sans-serif';
+const FONT_SCRIPT = '"Brush Script MT","Segoe Script","Snell Roundhand",cursive';
+const FONT_BODY = '"Arial Narrow","Helvetica Neue",Arial,sans-serif';
 
-// Draw the whole cover: panels with their photos and grades, then the lettering.
-// state: { layout, grade, gradeStrength, grain, vignette, title, subtitle, caption,
-//          stars, panels: [{ source, zoom, dx, dy }] } and sources: the source list.
-export function drawCover(g, W, H, state, sources) {
-  g.save();
-  g.fillStyle = '#050208';
-  g.fillRect(0, 0, W, H);
-  const gap = Math.max(4, Math.round(W * 0.007));
-  const rects = panelRects(state.layout, W, H);
+// ------------------------------------------------------------ the render --
+// opts: { layout, grade, gradeAmount, grain, vignette, title, tagline,
+//         caption, heat, active, panels: [{ pic, zoom, ox, oy }] }
+// pics: the picture list the panel indexes point into.
+
+export function renderCover(ctx, W, H, opts, pics) {
+  ctx.save();
+  ctx.fillStyle = "#04020a";
+  ctx.fillRect(0, 0, W, H);
+  const gutter = Math.max(4, Math.round(W * 0.007));
+  const rects = layoutPanels(opts.layout, W, H);
+
   rects.forEach((raw, i) => {
-    const panel = state.panels[i] ?? state.panels[0];
-    const source = sources[panel.source] ?? sources[0];
-    const r = { x: raw.x + gap / 2, y: raw.y + gap / 2, w: raw.w - gap, h: raw.h - gap };
-    if (!source || r.w <= 0 || r.h <= 0) return;
-    g.save();
-    g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
-    const scale = Math.max(r.w / source.w, r.h / source.h) * (panel.zoom || 1);
-    const dw = source.w * scale, dh = source.h * scale;
-    const dx = r.x + (r.w - dw) / 2 + (panel.dx || 0) * r.w;
-    const dy = r.y + (r.h - dh) / 2 + (panel.dy || 0) * r.h;
-    source.draw(g, dx, dy, dw, dh);
-    applyGrade(g, r, state.grade, state.gradeStrength, i % 2 === 1);
-    g.restore();
-    g.strokeStyle = '#050208';
-    g.lineWidth = gap;
-    g.strokeRect(raw.x + gap / 2, raw.y + gap / 2, raw.w - gap, raw.h - gap);
-    g.strokeStyle = 'rgba(255,255,255,0.16)';
-    g.lineWidth = Math.max(1, W * 0.0012);
-    g.strokeRect(r.x, r.y, r.w, r.h);
-    if (state.selected === i) {
-      g.strokeStyle = '#2ee6c8';
-      g.lineWidth = Math.max(2, W * 0.003);
-      g.strokeRect(r.x + g.lineWidth, r.y + g.lineWidth, r.w - g.lineWidth * 2, r.h - g.lineWidth * 2);
+    const panel = opts.panels[i] || opts.panels[0];
+    const pic = pics[panel.pic] || pics[0];
+    const r = { x: raw.x + gutter / 2, y: raw.y + gutter / 2, w: raw.w - gutter, h: raw.h - gutter };
+    if (!pic || r.w <= 0 || r.h <= 0) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    // cover-fit: scale so the picture covers the panel, then let zoom and
+    // the reader's offsets push it around inside the clip.
+    const coverScale = Math.max(r.w / pic.width, r.h / pic.height) * (panel.zoom || 1);
+    const dw = pic.width * coverScale;
+    const dh = pic.height * coverScale;
+    const dx = r.x + (r.w - dw) / 2 + (panel.ox || 0) * r.w;
+    const dy = r.y + (r.h - dh) / 2 + (panel.oy || 0) * r.h;
+    pic.paint(ctx, dx, dy, dw, dh);
+    washPanel(ctx, r, opts.grade, opts.gradeAmount, i % 2 === 1);
+    ctx.restore();
+    // frame: a dark seam and a hairline of light inside it
+    ctx.strokeStyle = "#04020a";
+    ctx.lineWidth = gutter;
+    ctx.strokeRect(raw.x + gutter / 2, raw.y + gutter / 2, raw.w - gutter, raw.h - gutter);
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = Math.max(1, W * 0.0012);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    if (opts.active === i) {
+      ctx.strokeStyle = "#2ee6c8";
+      ctx.lineWidth = Math.max(2, W * 0.003);
+      ctx.strokeRect(r.x + ctx.lineWidth, r.y + ctx.lineWidth, r.w - ctx.lineWidth * 2, r.h - ctx.lineWidth * 2);
     }
   });
 
-  if (state.stars > 0) {
-    const size = W * 0.021;
-    drawStars(g, W - size * 1.25 * state.stars - W * 0.028, W * 0.035, state.stars, size, '#ffd76a');
+  // heat stars, top right
+  if (opts.heat > 0) {
+    const r = W * 0.02;
+    const firstX = W - W * 0.03 - r - (opts.heat - 1) * r * 2.5;
+    ctx.save();
+    for (let i = 0; i < opts.heat; i++) {
+      star(ctx, firstX + i * r * 2.5, H * 0.038, r, "#ffd76a");
+    }
+    ctx.restore();
   }
 
-  // Title block: a condensed sunset-gradient wordmark, slightly sheared, with the
-  // script subtitle tucked under its right end.
-  const title = (state.title || '').trim();
+  // the title: a sheared, sunset-filled condensed wordmark across the top,
+  // with the script tagline rotated under its right shoulder.
+  const title = (opts.title || "").trim().toUpperCase();
   if (title) {
-    const size = fitFont(g, title.toUpperCase(), 700, TITLE_FONT, W * 0.16, W * 0.92);
-    g.save();
-    g.translate(W / 2, H * 0.045 + size);
-    g.transform(1, 0, -0.07, 1, 0, 0);
-    g.font = `700 ${size}px ${TITLE_FONT}`;
-    g.textAlign = 'center';
-    g.textBaseline = 'alphabetic';
-    const grad = g.createLinearGradient(0, -size, 0, size * 0.25);
-    grad.addColorStop(0, '#fff7e0');
-    grad.addColorStop(0.45, '#ffd76a');
-    grad.addColorStop(0.8, '#ff5e3a');
-    grad.addColorStop(1, '#ff4d8d');
-    g.shadowColor = 'rgba(0,0,0,0.65)';
-    g.shadowBlur = size * 0.12;
-    g.shadowOffsetY = size * 0.05;
-    g.lineWidth = size * 0.055;
-    g.strokeStyle = '#1c0b26';
-    g.strokeText(title.toUpperCase(), 0, 0);
-    g.shadowColor = 'transparent';
-    g.fillStyle = grad;
-    g.fillText(title.toUpperCase(), 0, 0);
-    g.restore();
-    const sub = (state.subtitle || '').trim();
-    if (sub) {
-      const subSize = fitFont(g, sub, 400, SCRIPT_FONT, W * 0.055, W * 0.6);
-      g.save();
-      g.translate(W * 0.635, H * 0.045 + size * 1.32);
-      g.rotate(-0.045);
-      g.font = `${subSize}px ${SCRIPT_FONT}`;
-      g.textAlign = 'center';
-      g.shadowColor = '#ff4d8d';
-      g.shadowBlur = subSize * 0.5;
-      g.fillStyle = '#a8fff2';
-      g.fillText(sub, 0, 0);
-      g.fillText(sub, 0, 0);
-      g.restore();
+    const size = shrinkToFit(ctx, title, 700, FONT_TITLE, W * 0.155, W * 0.92);
+    ctx.save();
+    ctx.translate(W / 2, H * 0.048 + size);
+    ctx.transform(1, 0, -0.06, 1, 0, 0);
+    ctx.font = `700 ${size}px ${FONT_TITLE}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    const fill = ctx.createLinearGradient(0, -size, 0, size * 0.22);
+    fill.addColorStop(0, "#fff6dc");
+    fill.addColorStop(0.45, "#ffd76a");
+    fill.addColorStop(0.8, "#ff5e3a");
+    fill.addColorStop(1, "#ff4d8d");
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = size * 0.12;
+    ctx.shadowOffsetY = size * 0.05;
+    ctx.lineWidth = size * 0.055;
+    ctx.strokeStyle = "#1a0a24";
+    ctx.strokeText(title, 0, 0);
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = fill;
+    ctx.fillText(title, 0, 0);
+    ctx.restore();
+
+    const tagline = (opts.tagline || "").trim();
+    if (tagline) {
+      const sub = shrinkToFit(ctx, tagline, 400, FONT_SCRIPT, W * 0.052, W * 0.58);
+      ctx.save();
+      ctx.translate(W * 0.64, H * 0.048 + size * 1.34);
+      ctx.rotate(-0.04);
+      ctx.font = `${sub}px ${FONT_SCRIPT}`;
+      ctx.textAlign = "center";
+      ctx.shadowColor = "#ff4d8d";
+      ctx.shadowBlur = sub * 0.5;
+      ctx.fillStyle = "#a9fff3";
+      ctx.fillText(tagline, 0, 0);
+      ctx.fillText(tagline, 0, 0);
+      ctx.restore();
     }
   }
 
-  // Caption bar along the bottom.
-  const caption = (state.caption || '').trim();
+  // caption strip along the bottom edge
+  const caption = (opts.caption || "").trim().toUpperCase();
   if (caption) {
-    const barH = H * 0.052;
-    g.fillStyle = 'rgba(6,3,14,0.74)';
-    g.fillRect(0, H - barH - H * 0.018, W, barH);
-    const size = fitFont(g, caption.toUpperCase(), 700, BODY_FONT, barH * 0.52, W * 0.9);
-    g.font = `700 ${size}px ${BODY_FONT}`;
-    try { g.letterSpacing = `${Math.round(size * 0.18)}px`; } catch { /* older engines */ }
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillStyle = '#fdf6ff';
-    g.fillText(caption.toUpperCase(), W / 2, H - barH / 2 - H * 0.018);
-    try { g.letterSpacing = '0px'; } catch { /* older engines */ }
+    const barH = H * 0.05;
+    const barY = H - barH - H * 0.018;
+    ctx.fillStyle = "rgba(5,2,12,0.75)";
+    ctx.fillRect(0, barY, W, barH);
+    const size = shrinkToFit(ctx, caption, 700, FONT_BODY, barH * 0.52, W * 0.9);
+    ctx.font = `700 ${size}px ${FONT_BODY}`;
+    if ("letterSpacing" in ctx) ctx.letterSpacing = `${Math.round(size * 0.16)}px`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fdf6ff";
+    ctx.fillText(caption, W / 2, barY + barH / 2);
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
   }
 
-  if (state.vignette) {
-    const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
-    vg.addColorStop(0, 'rgba(8,0,18,0)');
-    vg.addColorStop(1, 'rgba(8,0,18,0.42)');
-    g.fillStyle = vg;
-    g.fillRect(0, 0, W, H);
+  if (opts.vignette) {
+    const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
+    vg.addColorStop(0, "rgba(6,0,16,0)");
+    vg.addColorStop(1, "rgba(6,0,16,0.42)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
   }
-  if (state.grain) {
-    g.save();
-    g.globalAlpha = 0.055;
-    g.globalCompositeOperation = 'overlay';
-    g.fillStyle = getGrainPattern(g);
-    g.fillRect(0, 0, W, H);
-    g.restore();
+  if (opts.grain) {
+    ctx.save();
+    ctx.globalAlpha = 0.05;
+    ctx.globalCompositeOperation = "overlay";
+    ctx.fillStyle = grainFill(ctx);
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
   }
-  g.restore();
+  ctx.restore();
 }
