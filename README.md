@@ -1,82 +1,73 @@
-[![make.fun · gta6-cover-art-01](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
-[![rank](https://make.fun/badge/gta6-cover-art-01/Samot72/gta6-cover-art-01-entry/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
-[![reward](https://make.fun/badge/gta6-cover-art-01/Samot72/gta6-cover-art-01-entry/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
+# Poster Lab — a GTA-style cover art studio
 
-# ViceFrame Cover Studio — poster-style cover art from your own photos
+[![Competition](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/bounty/gta6-cover-art-01)
+[![Rank](https://make.fun/badge/gta6-cover-art-01/Samot72/gta6-cover-art-01-entry/rank.svg)](https://make.fun/bounty/gta6-cover-art-01)
+[![Reward](https://make.fun/badge/gta6-cover-art-01/Samot72/gta6-cover-art-01-entry/reward.svg)](https://make.fun/bounty/gta6-cover-art-01)
 
-An entry for make.fun's [gta6-cover-art-01](https://make.fun/bounty/gta6-cover-art-01).
+Poster Lab turns a photo and a caption into cover art in the spirit of the
+classic multi-panel game posters: bold gradient lettering, a Vice City
+sunset-or-neon colour grade, and a PNG you can share. It runs entirely in
+the browser from static files — your photos never leave your machine.
 
-ViceFrame is a small, self-contained web app that turns a photo and a caption
-into multi-panel poster-style cover art: a wide lead panel with a stack beside
-it (or a grid, a triptych, a single full bleed), a sunset-to-neon colour grade,
-big condensed lettering with a script subtitle, and a PNG export in the sizes
-people actually post. It runs entirely in the browser from its own static
-files — no server, no uploads, no network requests — so your photos never
-leave your machine.
+## What it does
 
-Everything here is the entry's own work. There is no Rockstar Games logo,
-artwork or font anywhere; the lettering uses system font stacks, and the demo
-artwork is painted by the app itself on a canvas.
+- **Any photo** — add your own pictures (or drop them onto the cover), then
+  click a panel to select it, drag inside it to reframe, scroll to zoom.
+  One photo can fill every panel, or each panel can carry a different one.
+- **Five panel layouts** — Spotlight (a tall hero panel with a trio beside
+  it), Quad grid, Triptych columns, Billboard + pair, and a Full bleed
+  single frame.
+- **Five colour grades** — Vice Sunset, Neon Nights, Golden Hour, Chrome
+  Noon and Midnight Teal, each with its own strength slider.
+- **Lettering** — a gradient title that auto-fits the frame, an italic
+  subtitle, a letterspaced caption bar and a row of heat stars.
+- **Fast exports** — one click renders a finished PNG at 1080×1080,
+  1080×1350 or 1920×1080.
+- **Forgiving** — a Random mix button for instant inspiration and a
+  sixty-step Undo for everything else.
+- **No photos handy?** Two stand-in scenes — a sunset boulevard and a neon
+  street — are painted at runtime by the app's own canvas painter and ship
+  as the starter photos.
 
-## Trying it
+## Run it
 
-Serve the `app/` folder with any static file server and open it in a desktop
-browser:
+Serve the `app/` folder with any static file server and open `index.html`
+in a desktop browser, for example:
 
+```sh
+npx serve app
+# or
+python3 -m http.server --directory app
 ```
-cd app && python3 -m http.server 8080
-# then visit http://localhost:8080
-```
 
-There is nothing to build. The studio opens with four pictures on the shelf —
-two framed stills it ships under `app/samples/`, and the same two scenes
-painted live by its own engine (a sunset boulevard and a neon street) — so
-you can make a first poster before adding a photo of your own.
+There is no build step and nothing to install; the app loads no network
+resources.
 
-## What the controls do
+## How it is built
 
-- **Add photos** — the masthead button, the file picker, or drag & drop onto
-  the window. A photo you add lands in the selected panel.
-- **Layout** — Hero + 3, Grid of 4, Triptych or Full bleed.
-- **Colour grade** — Vice sunset, Neon night, Golden hour or Chrome noon,
-  with a strength slider and film grain / vignette switches. Odd panels are
-  dealt the grade's cooler alternate recipe, which is what makes the sheet
-  feel printed rather than filtered.
-- **Lettering** — a gradient title in a condensed stack, a neon script
-  subtitle tucked under it, a caption ribbon along the bottom edge, and a
-  row of 0–5 heat stars.
-- **Selected panel** — click a panel on the poster to select it; drag on the
-  poster to position its photo, scroll over a panel (or use the Zoom slider)
-  to crop, swap its photo from the list, fill every panel with one photo, or
-  shuffle the panels around.
-- **Export size, then Download PNG** — 1080 × 1080, 1080 × 1350 or
-  1920 × 1080, written at full size in one click.
+Everything lives in one module, `app/poster.js`, in five parts: seeded
+random and colour utilities; two procedural scene painters (canvas paths
+only — palms, skylines, a striped retro sun, neon signs and their wet-street
+reflections); the five colour grades, layered with blend-mode gradients;
+the panel layouts and cover renderer with its lettering; and the editor,
+which wires the page controls to a small state object with undo history.
+`app/index.html` and `app/style.css` are the page and its theme.
 
-## How the entry is handed in
+`main.ts` (Node 22, standard library only) hands the entry in: it copies
+`app/` and `screenshots/` to the output folder and writes `dossier.json`
+with `buildDossier` from `vendor/makefun-app.ts`.
 
-`main.ts` is the entry program (Node 22, standard library only). It mirrors
-`app/` and `screenshots/` into the output directory, writes a `dossier.json`
-there using `buildDossier` from the vendored library in
-`vendor/makefun-app.ts`, and then audits its own delivery: the app tree's
-entry count, total bytes and longest path, the screenshot count with each
-shot's weight and pixel sides, and the dossier's size, all against the
-gate's caps. Outside the grader, `MAKEFUN_OUTPUT_DIR` stands in for
-`/output`:
-
-```
+```sh
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
 
-## What's in the repository
+## Originality
 
-- `app/index.html` and `app/style.css` — the editor page and its styling.
-- `app/cover.js` — the poster engine: panel layouts, colour grades,
-  lettering, grain and vignette, and the two scenes the studio paints.
-- `app/app.js` — the editor: photo loading, panel selection, drag and zoom,
-  the live preview and the PNG export.
-- `app/samples/` — the two framed scene stills the studio ships.
-- `screenshots/` — the studio with a photo loaded, and posters it exported
-  (wide, square and portrait).
-- `vendor/makefun-app.ts` — the kit's dossier library, byte for byte
-  unchanged.
-- `LICENSE` — MIT.
+Poster Lab is an original fan tool. It uses no Rockstar Games or Take-Two
+logos, artwork, characters or fonts; the lettering is set in system font
+stacks, and every image in the screenshots is either painted by the app's
+own code or a photo the maker supplied.
+
+## License
+
+MIT — see `LICENSE`.

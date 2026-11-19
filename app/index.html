@@ -3,99 +3,121 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ViceFrame Cover Studio — poster-style cover art from your photos</title>
+<title>Poster Lab — fan-made GTA-style cover studio</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="masthead">
-  <div class="brand">
-    <span class="brand-chip">VF</span>
-    <span class="brand-name">VICEFRAME</span>
-    <span class="brand-tag">cover studio</span>
-  </div>
-  <div class="masthead-buttons">
-    <label class="btn" for="fileInput">Add photos</label>
-    <input id="fileInput" type="file" accept="image/*" multiple hidden>
-    <button id="shuffleBtn" class="btn" type="button">Shuffle panels</button>
-    <button id="downloadBtn" class="btn primary" type="button">Download PNG</button>
+  <div class="masthead-inner">
+    <h1 class="brand">POSTER<span class="brand-accent">LAB</span></h1>
+    <p class="tagline">Turn any photo into a multi-panel, sunset-graded cover poster — right in your browser, nothing uploaded.</p>
   </div>
 </header>
 
-<main class="bench">
-  <aside class="rail">
-    <section class="card">
-      <h2>Photos</h2>
-      <div id="photoStrip" class="strip"></div>
-      <p class="note">Drop photos anywhere on this window, or use the button above.
-      They are read on this machine only — never uploaded. The studio opens with two
-      framed stills it ships and two scenes it paints itself, so a first poster can be
-      made before you add a photo of your own.</p>
-    </section>
-
-    <section class="card">
-      <h2>Layout</h2>
-      <div class="seg" id="layoutSeg">
-        <button type="button" data-layout="hero" class="on">Hero + 3</button>
-        <button type="button" data-layout="grid">Grid of 4</button>
-        <button type="button" data-layout="triptych">Triptych</button>
-        <button type="button" data-layout="full">Full bleed</button>
+<main class="workspace">
+  <aside class="controls" aria-label="Cover controls">
+    <section class="control-group">
+      <h2>1 · Photos</h2>
+      <label class="file-pick">
+        <input type="file" id="photoFile" accept="image/*" multiple>
+        Add your photos
+      </label>
+      <p class="hint">…or drop image files onto the cover. Two painted stand-ins are built in:</p>
+      <div class="sample-row">
+        <button type="button" class="sample-thumb" data-sample="boulevard">
+          <img src="samples/boulevard.jpg" alt="Painted sunset boulevard sample">
+          <span>Sunset Boulevard</span>
+        </button>
+        <button type="button" class="sample-thumb" data-sample="neon">
+          <img src="samples/neon-street.jpg" alt="Painted neon street sample">
+          <span>Neon Street</span>
+        </button>
       </div>
     </section>
 
-    <section class="card">
-      <h2>Colour grade</h2>
-      <div class="seg" id="gradeSeg">
-        <button type="button" data-grade="sunset" class="on">Vice sunset</button>
-        <button type="button" data-grade="neon">Neon night</button>
-        <button type="button" data-grade="golden">Golden hour</button>
-        <button type="button" data-grade="chrome">Chrome noon</button>
+    <section class="control-group">
+      <h2>2 · Panels</h2>
+      <div class="layout-row" id="layoutRow">
+        <button type="button" class="layout-btn is-active" data-layout="spotlight">Spotlight</button>
+        <button type="button" class="layout-btn" data-layout="quad">Quad</button>
+        <button type="button" class="layout-btn" data-layout="triptych">Triptych</button>
+        <button type="button" class="layout-btn" data-layout="billboard">Billboard</button>
+        <button type="button" class="layout-btn" data-layout="fullbleed">Full bleed</button>
       </div>
-      <label class="row"><span>Grade strength</span>
-        <input id="gradeRange" type="range" min="0" max="100" value="80"></label>
-      <label class="check"><input id="grainCheck" type="checkbox" checked> Film grain</label>
-      <label class="check"><input id="vignetteCheck" type="checkbox" checked> Vignette</label>
+      <p class="hint">Click a panel on the cover to select it, drag inside it to reframe its photo, scroll to zoom it.</p>
+      <label class="field">
+        <span id="panelLabel">Panel 1</span> photo
+        <select id="panelPhoto"></select>
+      </label>
+      <label class="field">
+        <span>Panel zoom</span>
+        <input type="range" id="panelZoom" min="100" max="300" value="105">
+      </label>
     </section>
 
-    <section class="card">
-      <h2>Lettering</h2>
-      <label class="field"><span>Title</span>
-        <input id="titleInput" type="text" value="VICE FRAME" maxlength="24"></label>
-      <label class="field"><span>Script subtitle</span>
-        <input id="subtitleInput" type="text" value="neon coast stories" maxlength="40"></label>
-      <label class="field"><span>Caption</span>
-        <input id="captionInput" type="text" value="ONE CITY. NO BRAKES." maxlength="60"></label>
-      <label class="row"><span>Heat stars</span>
-        <input id="starsRange" type="range" min="0" max="5" step="1" value="5"></label>
+    <section class="control-group">
+      <h2>3 · Colour grade</h2>
+      <label class="field">
+        <span>Grade</span>
+        <select id="gradeSelect">
+          <option value="vice" selected>Vice Sunset</option>
+          <option value="neon">Neon Nights</option>
+          <option value="golden">Golden Hour</option>
+          <option value="chrome">Chrome Noon</option>
+          <option value="teal">Midnight Teal</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Grade strength</span>
+        <input type="range" id="gradeStrength" min="0" max="100" value="85">
+      </label>
     </section>
 
-    <section class="card">
-      <h2>Selected panel</h2>
-      <p class="note" id="panelLabel">Panel 1 of 4 — click a panel on the poster, then drag to position its photo.</p>
-      <label class="row"><span>Zoom</span>
-        <input id="zoomRange" type="range" min="100" max="300" value="100"></label>
-      <label class="field"><span>Photo in this panel</span>
-        <select id="panelPhotoSelect"></select></label>
-      <button id="fillAllBtn" class="btn wide" type="button">Fill every panel with this photo</button>
+    <section class="control-group">
+      <h2>4 · Lettering</h2>
+      <label class="field">
+        <span>Title</span>
+        <input type="text" id="titleText" value="NEON HARBOR" maxlength="30">
+      </label>
+      <label class="field">
+        <span>Subtitle</span>
+        <input type="text" id="subtitleText" value="every tide brings trouble" maxlength="48">
+      </label>
+      <label class="field">
+        <span>Caption</span>
+        <input type="text" id="captionText" value="One last ride along the shore" maxlength="60">
+      </label>
+      <label class="field">
+        <span>Heat stars: <output id="starsValue">5</output></span>
+        <input type="range" id="starsRange" min="0" max="5" step="1" value="5">
+      </label>
     </section>
 
-    <section class="card">
-      <h2>Export size</h2>
-      <div class="seg" id="sizeSeg">
-        <button type="button" data-size="square">1080 × 1080</button>
-        <button type="button" data-size="portrait" class="on">1080 × 1350</button>
-        <button type="button" data-size="wide">1920 × 1080</button>
+    <section class="control-group">
+      <h2>5 · Export</h2>
+      <div class="size-row" role="radiogroup" aria-label="Export size">
+        <label><input type="radio" name="exportSize" value="square" checked> Square 1080×1080</label>
+        <label><input type="radio" name="exportSize" value="portrait"> Portrait 1080×1350</label>
+        <label><input type="radio" name="exportSize" value="wide"> Wide 1920×1080</label>
       </div>
-      <p class="note">One click writes a PNG at the full size. The studio runs entirely
-      from its own files, offline — your photos never leave this machine.</p>
+      <div class="button-row">
+        <button type="button" id="exportBtn" class="primary-btn">Export PNG</button>
+        <button type="button" id="randomBtn">Random mix</button>
+        <button type="button" id="undoBtn" disabled>Undo</button>
+      </div>
+      <p class="hint">Exports render at full size from the same canvas you see. Everything stays on your machine.</p>
     </section>
   </aside>
 
-  <section class="stage" id="stage">
-    <canvas id="stageCanvas" width="864" height="1080"></canvas>
-    <p class="hint">Drag on the poster to position the selected panel's photo. Scroll over a panel to zoom it.</p>
+  <section class="stage-area">
+    <div id="stageWrap" class="stage-wrap">
+      <canvas id="stageCanvas" width="1080" height="1080"></canvas>
+    </div>
+    <p id="statusLine" class="status-line" role="status">Loading the studio…</p>
+    <p class="fineprint">Poster Lab makes original fan art in the spirit of classic game covers. It is not affiliated with Rockstar Games or Take-Two Interactive, and uses no logos, artwork or fonts from any game.</p>
   </section>
 </main>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="poster.js"></script>
 </body>
 </html>
