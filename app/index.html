@@ -1,123 +1,110 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Poster Lab — fan-made GTA-style cover studio</title>
-<link rel="stylesheet" href="style.css">
+<title>Vice Grade Studio — GTA-style cover art from your own photos</title>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<header class="masthead">
-  <div class="masthead-inner">
-    <h1 class="brand">POSTER<span class="brand-accent">LAB</span></h1>
-    <p class="tagline">Turn any photo into a multi-panel, sunset-graded cover poster — right in your browser, nothing uploaded.</p>
+<header class="topbar">
+  <div class="brand">VICE GRADE <span>STUDIO</span></div>
+  <p class="brand-sub">Cover art from your own photos — painted, inked, graded, printed. Nothing uploads, ever.</p>
+  <div class="top-actions">
+    <label class="size-label">Post size
+      <select id="size-select">
+        <option value="1080x1080">1080 × 1080 — Square post</option>
+        <option value="1080x1350" selected>1080 × 1350 — Portrait post</option>
+        <option value="1920x1080">1920 × 1080 — Wide banner</option>
+      </select>
+    </label>
+    <button id="wall-btn" type="button">Cover Wall</button>
+    <button id="present-btn" type="button">Present</button>
+    <button id="export-btn" type="button" class="primary">Export PNG</button>
   </div>
 </header>
 
-<main class="workspace">
-  <aside class="controls" aria-label="Cover controls">
-    <section class="control-group">
-      <h2>1 · Photos</h2>
-      <label class="file-pick">
-        <input type="file" id="photoFile" accept="image/*" multiple>
-        Add your photos
-      </label>
-      <p class="hint">…or drop image files onto the cover. Two painted stand-ins are built in:</p>
-      <div class="sample-row">
-        <button type="button" class="sample-thumb" data-sample="boulevard">
-          <img src="samples/boulevard.jpg" alt="Painted sunset boulevard sample">
-          <span>Sunset Boulevard</span>
-        </button>
-        <button type="button" class="sample-thumb" data-sample="neon">
-          <img src="samples/neon-street.jpg" alt="Painted neon street sample">
-          <span>Neon Street</span>
-        </button>
+<main class="workbench">
+  <aside class="rail left">
+    <section>
+      <h2>1 · Photographs</h2>
+      <div id="drop-zone">
+        <p>Drop photos here, or</p>
+        <button id="upload-btn" type="button">Browse your photos</button>
+        <input type="file" id="file-input" accept="image/*" multiple hidden>
+        <p class="fineprint">Six painted samples are loaded to start. Your photos are read on this machine only.</p>
       </div>
-    </section>
-
-    <section class="control-group">
-      <h2>2 · Panels</h2>
-      <div class="layout-row" id="layoutRow">
-        <button type="button" class="layout-btn is-active" data-layout="spotlight">Spotlight</button>
-        <button type="button" class="layout-btn" data-layout="quad">Quad</button>
-        <button type="button" class="layout-btn" data-layout="triptych">Triptych</button>
-        <button type="button" class="layout-btn" data-layout="billboard">Billboard</button>
-        <button type="button" class="layout-btn" data-layout="fullbleed">Full bleed</button>
-      </div>
-      <p class="hint">Click a panel on the cover to select it, drag inside it to reframe its photo, scroll to zoom it.</p>
-      <label class="field">
-        <span id="panelLabel">Panel 1</span> photo
-        <select id="panelPhoto"></select>
-      </label>
-      <label class="field">
-        <span>Panel zoom</span>
-        <input type="range" id="panelZoom" min="100" max="300" value="105">
+      <div id="photo-tray"></div>
+      <p class="hint">Click a numbered panel on the cover, then click a photo to place it there. Drag on the cover to frame the shot.</p>
+      <label class="slider-label">Selected photo zoom
+        <input type="range" id="zoom-range" min="1" max="2.6" step="0.01" value="1">
       </label>
     </section>
 
-    <section class="control-group">
-      <h2>3 · Colour grade</h2>
-      <label class="field">
-        <span>Grade</span>
-        <select id="gradeSelect">
-          <option value="vice" selected>Vice Sunset</option>
-          <option value="neon">Neon Nights</option>
-          <option value="golden">Golden Hour</option>
-          <option value="chrome">Chrome Noon</option>
-          <option value="teal">Midnight Teal</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Grade strength</span>
-        <input type="range" id="gradeStrength" min="0" max="100" value="85">
-      </label>
-    </section>
-
-    <section class="control-group">
-      <h2>4 · Lettering</h2>
-      <label class="field">
-        <span>Title</span>
-        <input type="text" id="titleText" value="NEON HARBOR" maxlength="30">
-      </label>
-      <label class="field">
-        <span>Subtitle</span>
-        <input type="text" id="subtitleText" value="every tide brings trouble" maxlength="48">
-      </label>
-      <label class="field">
-        <span>Caption</span>
-        <input type="text" id="captionText" value="One last ride along the shore" maxlength="60">
-      </label>
-      <label class="field">
-        <span>Heat stars: <output id="starsValue">5</output></span>
-        <input type="range" id="starsRange" min="0" max="5" step="1" value="5">
-      </label>
-    </section>
-
-    <section class="control-group">
-      <h2>5 · Export</h2>
-      <div class="size-row" role="radiogroup" aria-label="Export size">
-        <label><input type="radio" name="exportSize" value="square" checked> Square 1080×1080</label>
-        <label><input type="radio" name="exportSize" value="portrait"> Portrait 1080×1350</label>
-        <label><input type="radio" name="exportSize" value="wide"> Wide 1920×1080</label>
-      </div>
-      <div class="button-row">
-        <button type="button" id="exportBtn" class="primary-btn">Export PNG</button>
-        <button type="button" id="randomBtn">Random mix</button>
-        <button type="button" id="undoBtn" disabled>Undo</button>
-      </div>
-      <p class="hint">Exports render at full size from the same canvas you see. Everything stays on your machine.</p>
+    <section>
+      <h2>2 · Cover text</h2>
+      <label>Title <input type="text" id="title-input" maxlength="26"></label>
+      <label>Tagline <input type="text" id="tagline-input" maxlength="60"></label>
+      <label>Callout bubble <input type="text" id="callout-input" maxlength="42"></label>
+      <label>Starburst <input type="text" id="burst-input" maxlength="26"></label>
+      <label>Issue line <input type="text" id="issue-input" maxlength="60"></label>
+      <label class="check"><input type="checkbox" id="seal-check" checked> Rating-style seal</label>
+      <label class="check"><input type="checkbox" id="barcode-check" checked> Barcode</label>
+      <label class="check"><input type="checkbox" id="billing-check" checked> Billing block</label>
     </section>
   </aside>
 
-  <section class="stage-area">
-    <div id="stageWrap" class="stage-wrap">
-      <canvas id="stageCanvas" width="1080" height="1080"></canvas>
+  <section class="stage">
+    <div class="canvas-wrap">
+      <canvas id="stage-canvas" width="864" height="1080"></canvas>
     </div>
-    <p id="statusLine" class="status-line" role="status">Loading the studio…</p>
-    <p class="fineprint">Poster Lab makes original fan art in the spirit of classic game covers. It is not affiliated with Rockstar Games or Take-Two Interactive, and uses no logos, artwork or fonts from any game.</p>
+    <p id="stage-caption"></p>
   </section>
+
+  <aside class="rail right">
+    <section>
+      <h2>3 · Layout gallery</h2>
+      <div id="layout-gallery"></div>
+    </section>
+    <section>
+      <h2>4 · Render engine</h2>
+      <div id="engine-switch"></div>
+    </section>
+    <section>
+      <h2>5 · Colour grade</h2>
+      <div id="grade-list"></div>
+      <label class="check"><input type="checkbox" id="vary-check"> Vary the grade per panel</label>
+      <button id="remix-btn" type="button">Remix panel grades</button>
+    </section>
+  </aside>
 </main>
 
-<script type="module" src="poster.js"></script>
+<div id="wall" hidden>
+  <div class="wall-head">
+    <h2>Cover Wall — one cast, three finishes</h2>
+    <button id="wall-close" type="button">Back to the studio</button>
+  </div>
+  <div class="wall-row">
+    <figure>
+      <canvas id="wall-canvas-1" width="400" height="500"></canvas>
+      <figcaption id="wall-cap-1"></figcaption>
+    </figure>
+    <figure>
+      <canvas id="wall-canvas-2" width="400" height="500"></canvas>
+      <figcaption id="wall-cap-2"></figcaption>
+    </figure>
+    <figure>
+      <canvas id="wall-canvas-3" width="400" height="500"></canvas>
+      <figcaption id="wall-cap-3"></figcaption>
+    </figure>
+  </div>
+</div>
+
+<div id="present" hidden>
+  <canvas id="present-canvas" width="1280" height="720"></canvas>
+  <p class="present-hint">Click anywhere to return to the studio</p>
+</div>
+
+<script type="module" src="./js/studio.js"></script>
 </body>
 </html>
